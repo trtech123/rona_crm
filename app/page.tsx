@@ -1,6 +1,8 @@
-import RealEstateQuestionnaire from "../real-estate-questionnaire"
+"use client"
+
+import { HoogiLandingPage } from "@/components/hoogilandingpage"
 
 export default function Home() {
-  return <RealEstateQuestionnaire />
+  return <HoogiLandingPage />
 }
 

@@ -14,9 +14,13 @@ import {
     LogOut, // For Logout/Settings
     Heart, // Placeholder icon, replace if needed
     User, // For Profile
-    Sparkles // Added for AI Automations
+    Sparkles, // Added for AI Automations
+    ClipboardList, // Added for Post Creation
+    Bot, // Added for AI Automations
+    PlusCircle // Added for Post Creation
 } from 'lucide-react';
 import { DashboardSection } from './DashboardLayout'; // Import the type
+import Link from 'next/link'; // Import Link
 
 interface SidebarProps {
     activeSection: DashboardSection;
@@ -25,80 +29,74 @@ interface SidebarProps {
 
 // Define navigation items with explicit labels for tooltips
 const navItems = [
-    { id: 'dashboard', label: 'לוח בקרה', icon: Home },
-    { id: 'profile', label: 'הפרופיל שלי', icon: User },
-    { id: 'leads', label: 'לידים', icon: Users },
-    { id: 'comments', label: 'תגובות', icon: MessageSquare },
-    { id: 'tasks', label: 'משימות', icon: CheckSquare },
-    { id: 'events', label: 'אירועים', icon: Calendar },
-    { id: 'articles', label: 'מאמרים', icon: FileText },
-    { id: 'aiAutomations', label: 'אוטומציות AI', icon: Sparkles }, // Added AI Automations
-    // Add more sections here if needed
+    { id: 'dashboard', name: 'לוח בקרה', icon: Home },
+    { id: 'leads', name: 'לידים', icon: Users },
+    { id: 'comments', name: 'תגובות', icon: MessageSquare },
+    { id: 'tasks', name: 'משימות', icon: ClipboardList },
+    { id: 'events', name: 'אירועים', icon: Calendar },
+    { id: 'articles', name: 'מאמרים', icon: FileText },
+    { id: 'aiAutomations', name: 'אוטומציות AI', icon: Bot },
+    { id: 'postCreation', name: 'יצירת פוסט', icon: PlusCircle, href: '/post-creation' },
+    { id: 'settings', name: 'הגדרות', icon: Settings },
+    { id: 'profile', name: 'פרופיל', icon: User },
 ];
 
 // Separate settings item for the bottom
-const settingsItem = { id: 'settings', label: 'הגדרות', icon: Settings };
+const settingsItem = { id: 'settings', name: 'הגדרות', icon: Settings };
 
 const DashboardSidebar = ({ activeSection, setActiveSection }: SidebarProps) => {
     return (
-        <aside className="w-56 bg-white p-3 flex flex-col border-l border-gray-200 z-10" dir="rtl">
-            {/* Top Logo */}
-            <div className="mb-8 mt-2 flex justify-center">
-                <Button
-                    variant="ghost"
-                    className={`rounded-full h-11 w-11 bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:opacity-90 transition-opacity flex items-center justify-center`}
-                    onClick={() => setActiveSection('dashboard')}
-                    aria-label="לוח בקרה" // Accessibility label
-                >
-                    <Heart className="h-5 w-5" />
-                </Button>
+        <aside className="w-64 bg-white shadow-md flex flex-col h-full">
+            {/* Logo/Brand */}
+            <div className="p-4 border-b border-gray-200">
+                <h1 className="text-xl font-bold text-purple-700 text-center">מערכת ניהול</h1>
             </div>
 
-            {/* Main Navigation with Icons and Labels */}
-            <nav className="flex-1 flex flex-col gap-1.5">
-                {navItems.map((item) => (
-                    <Button
-                        key={item.id}
-                        variant="ghost"
-                        className={`justify-start px-3 py-2.5 h-auto relative rounded-lg transition-colors duration-150 ${ 
-                            activeSection === item.id 
-                            ? 'bg-blue-50 text-blue-600' 
-                            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
-                        }`}
-                        onClick={() => setActiveSection(item.id as DashboardSection)}
-                    >
-                        {/* Active indicator */}
-                        {activeSection === item.id && (
-                            <span className="absolute right-0 top-1/2 h-5 w-1 rounded-r-full bg-blue-600 transform -translate-y-1/2"></span>
-                        )}
-                        <div className="flex items-center gap-3 mr-1">
-                            <item.icon className="h-5 w-5 flex-shrink-0" />
-                            <span className="text-sm font-medium">{item.label}</span>
-                        </div>
-                    </Button>
-                ))}
+            {/* Navigation */}
+            <nav className="flex-1 mt-4 space-y-1 px-2">
+                {navItems.map((item) => {
+                    // Use Link for items with an href
+                    if (item.href) {
+                        return (
+                            <Link key={item.id} href={item.href} passHref>
+                                <Button
+                                    variant="ghost" // Use ghost variant like other buttons
+                                    className={`w-full justify-start px-3 py-2.5 h-auto relative rounded-lg transition-colors duration-150 text-sm font-medium
+                                        ${activeSection === item.id // Highlight if active (optional for external links)
+                                            ? 'bg-purple-100 text-purple-700'
+                                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                        }`}
+                                    // onClick={() => setActiveSection(item.id as DashboardSection)} // Decide if clicking external link should change internal section
+                                >
+                                    <item.icon className="ml-3 h-5 w-5" /> {/* Use ml-3 for RTL */} 
+                                    {item.name}
+                                </Button>
+                            </Link>
+                        );
+                    } else {
+                        // Use Button for internal section switching
+                        return (
+                            <Button
+                                key={item.id}
+                                variant="ghost" // Use ghost variant
+                                onClick={() => setActiveSection(item.id as DashboardSection)}
+                                className={`w-full justify-start px-3 py-2.5 h-auto relative rounded-lg transition-colors duration-150 text-sm font-medium
+                                    ${activeSection === item.id
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                                    }`}
+                            >
+                                <item.icon className="ml-3 h-5 w-5" /> {/* Use ml-3 for RTL */} 
+                                {item.name}
+                            </Button>
+                        );
+                    }
+                })}
             </nav>
 
-            {/* Bottom Settings with Icon and Label */}
-            <div className="mt-auto mb-2">
-                <Button
-                    variant="ghost"
-                    className={`justify-start px-3 py-2.5 h-auto w-full relative rounded-lg transition-colors duration-150 ${ 
-                        activeSection === settingsItem.id 
-                        ? 'bg-blue-50 text-blue-600' 
-                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
-                    }`}
-                    onClick={() => setActiveSection(settingsItem.id as DashboardSection)}
-                >
-                    {/* Active indicator */}
-                    {activeSection === settingsItem.id && (
-                        <span className="absolute right-0 top-1/2 h-5 w-1 rounded-r-full bg-blue-600 transform -translate-y-1/2"></span>
-                    )}
-                    <div className="flex items-center gap-3 mr-1">
-                        <settingsItem.icon className="h-5 w-5 flex-shrink-0" />
-                        <span className="text-sm font-medium">{settingsItem.label}</span>
-                    </div>
-                </Button>
+            {/* Optional Footer/User Info */}
+            <div className="p-4 mt-auto border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">© 2024 Rona AI</p>
             </div>
         </aside>
     );

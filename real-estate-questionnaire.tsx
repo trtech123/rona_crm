@@ -17,6 +17,7 @@ import { Mic, Check, ChevronDown, ChevronLeft, ChevronRight, Info } from "lucide
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { motion, AnimatePresence } from "framer-motion" // Import motion and AnimatePresence
+import { supabase } from "@/lib/supabaseClient"; // <-- Import supabase client
 
 // Define the *minimal* necessary schema based on remaining questions
 const formSchema = z.object({
@@ -357,16 +358,17 @@ if (fileUploadGroup.length > 0) {
 }
 
 // Main Component
-export default function RealEstateQuestionnaire() {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0) // Changed state name
+export default function RealEstateQuestionnaire({ defaultValues }: { defaultValues?: any }) {
+  const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [showOtherInput, setShowOtherInput] = useState<Record<string, boolean>>({})
-  const [submitted, setSubmitted] = useState(false); // Track submission
-  const router = useRouter(); // Initialize router
+  const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      // Update default values based on the *filtered* schema fields
+    defaultValues: defaultValues || {
       fullName: "",
       businessName: "",
       profession: "",
@@ -384,15 +386,20 @@ export default function RealEstateQuestionnaire() {
       selfPresentation: "",
       idealClient: [],
       otherIdealClient: "",
-      // Removed clientAge, otherClientAge
       professionalBackground: "",
-      // Removed realEstateJourney
       favoriteAspect: "",
-      // Removed proudProject, learnedMistake, emotionalFeedback, hasReturningClients, returningClientsDetails, successStory
-      additionalInfo: "", // ADDED BACK
+      additionalInfo: "",
     },
     mode: 'onChange', // Validate on change to enable/disable Next button
   })
+
+  // Reset form when defaultValues change (e.g., fetched from DB)
+  useEffect(() => {
+    if (defaultValues) {
+        console.log("[RealEstateQuestionnaire] Resetting form with defaultValues:", defaultValues);
+      form.reset(defaultValues);
+    }
+  }, [defaultValues, form.reset]);
 
   const formValues = form.watch()
   const totalSteps = steps.length // Use the new steps array length
@@ -440,6 +447,12 @@ export default function RealEstateQuestionnaire() {
     return isValid;
   };
 
+  const handleKeyDown = async (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !(event.target instanceof HTMLTextAreaElement) && !event.shiftKey) {
+      event.preventDefault(); // Prevent default form submission or newline
+      await handleNext(); // Call the next step handler
+    }
+  };
 
   const handleNext = async () => {
     const isValid = await isCurrentStepValid();
@@ -453,9 +466,9 @@ export default function RealEstateQuestionnaire() {
 
         if (nextStepIndex < totalSteps) {
             setCurrentStepIndex(nextStepIndex);
-    } else {
-            // Reached the end (or beyond) after skipping
-            handleSubmit();
+        } else {
+            // Reached the end, trigger the actual submit function
+            await handleSubmit(); // Call the updated handleSubmit
         }
     } else {
         console.log("Current step is not valid");
@@ -487,18 +500,102 @@ export default function RealEstateQuestionnaire() {
    };
 
   const handleSubmit = async () => {
-    // Validate *all* schema fields before final submit, not just current step
+    setSubmitError(null);
     const isValid = await form.trigger();
-    if (isValid) {
-      const data = form.getValues();
-      console.log("Form Submitted:", data);
+    if (!isValid) {
+      setSubmitError("אנא מלא את כל שדות החובה לפני השליחה.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    const originalFormData = { ...form.getValues() }; // Clone the data
+    const logoFile = originalFormData.logo as File | null | undefined; // Extract file
+    const profilePicFile = originalFormData.profilePicture as File | null | undefined; // Extract file
+
+    // Create a clean object for JSON storage (without file objects)
+    const dataForJson = { ...originalFormData };
+    delete dataForJson.logo;
+    delete dataForJson.profilePicture;
+
+    let logoUrl: string | null = null;
+    let profilePictureUrl: string | null = null;
+
+    try {
+      // 1. Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        throw new Error(userError?.message || "לא ניתן לאמת משתמש. נסה להתחבר מחדש.");
+      }
+
+      // --- File Upload Logic ---
+      const uploadFile = async (file: File | null | undefined, fileNamePrefix: string): Promise<string | null> => {
+        if (!file || !(file instanceof File)) return null; // Added check if it's actually a File
+
+        const fileExt = file.name.split('.').pop();
+        // Ensure unique path per user
+        const filePath = `${user.id}/${fileNamePrefix}_${Date.now()}.${fileExt}`;
+
+        console.log(`Uploading ${fileNamePrefix} to: ${filePath}`); // Add log
+        const { error: uploadError } = await supabase.storage
+          .from('profile_media')
+          .upload(filePath, file, { 
+            cacheControl: '3600',
+            upsert: false // Set upsert to false to avoid potential issues, ensure unique names
+          });
+
+        if (uploadError) {
+          console.error(`Error uploading ${fileNamePrefix}:`, uploadError);
+          throw new Error(`שגיאה בהעלאת ${fileNamePrefix === 'logo' ? 'לוגו' : 'תמונת פרופיל'}. (${uploadError.message})`); // Include Supabase error
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+            .from('profile_media')
+            .getPublicUrl(filePath);
+            
+        console.log(`Public URL for ${fileNamePrefix}: ${urlData?.publicUrl}`); // Add log
+        return urlData?.publicUrl || null;
+      };
+
+      logoUrl = await uploadFile(logoFile, 'logo');
+      profilePictureUrl = await uploadFile(profilePicFile, 'profile_picture');
+      // --- End File Upload Logic ---
+
+      // 2. Save questionnaire response (using the clean dataForJson)
+      const { error: responseError } = await supabase
+        .from('questionnaire_responses')
+        .upsert({ user_id: user.id, response: dataForJson }, { onConflict: 'user_id' });
+
+      if (responseError) {
+        console.error("Error saving questionnaire response:", responseError);
+        throw new Error("שגיאה בשמירת תשובות השאלון.");
+      }
+
+      // 3. Update profile flag and URLs
+      const profileUpdateData: { questionnaire_completed: boolean; logo_url?: string; profile_picture_url?: string } = {
+        questionnaire_completed: true,
+      };
+      if (logoUrl) profileUpdateData.logo_url = logoUrl;
+      if (profilePictureUrl) profileUpdateData.profile_picture_url = profilePictureUrl;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(profileUpdateData)
+        .eq('id', user.id);
+
+      if (profileError) {
+        console.error("Error updating profile:", profileError);
+      }
+
+      // 4. Redirect to dashboard
       setSubmitted(true);
       router.push('/dashboard');
-    } else {
-       console.log("Form has validation errors");
-       // Maybe find the first step with an error and navigate there?
-       // Requires mapping errors back to visible steps.
-       // For now, just log.
+
+    } catch (error: any) {
+      console.error("Questionnaire submission failed:", error);
+      setSubmitError(error.message || "שגיאה לא צפויה התרחשה.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -577,7 +674,11 @@ export default function RealEstateQuestionnaire() {
                    )}
                             </FormLabel>
                             <FormControl>
-                   <Input placeholder={question.placeholder} {...field} />
+                   <Input 
+                     placeholder={question.placeholder} 
+                     {...field} 
+                     onKeyDown={handleKeyDown}
+                   />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -823,18 +924,30 @@ export default function RealEstateQuestionnaire() {
                          <div className="mb-8">
                            {renderStep(currentStepItem)}
                     </div>
- 
+
+                    {/* Display Submission Error */} 
+                    {submitError && (
+                        <p className="text-red-500 text-center text-sm mb-4">{submitError}</p>
+                    )}
+
                           {/* Navigation Buttons */}
                           <div className="flex justify-between mt-auto pt-6 border-t border-gray-200">
                                {/* Next/Submit Button - On the right visually in RTL */}
                                 <Button
                                   type="button"
                                  onClick={currentStepIndex === totalSteps - 1 ? handleSubmit : handleNext}
+                                 disabled={isSubmitting} // Disable if submitting
                                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white disabled:opacity-50 shadow-md flex items-center"
                                  // Add disabled logic if needed based on validation
                                >
-                                 <ChevronRight className="h-4 w-4 ml-2" />
-                                 {currentStepIndex === totalSteps - 1 ? "סיום והפעלת הסוכן" : "הבא"}
+                                 {isSubmitting ? (
+                                     <> <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> מעבד... </> 
+                                 ) : (
+                                     <>
+                                         {currentStepIndex === totalSteps - 1 ? "סיום והפעלת הסוכן" : "הבא"}
+                                         <ChevronLeft className="h-4 w-4 mr-2" />
+                                     </>
+                                 )}
                                 </Button>
   
                              {/* Previous Button - On the left visually in RTL */}
@@ -842,10 +955,10 @@ export default function RealEstateQuestionnaire() {
                                   type="button"
                                  variant="outline"
                                  onClick={handlePrevious}
-                                 disabled={currentStepIndex === 0}
+                                 disabled={currentStepIndex === 0 || isSubmitting} // Disable if submitting
                                  className="border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50 flex items-center"
                               >
-                                 <ChevronRight className="h-4 w-4 ml-2" />
+                                 <ChevronLeft className="h-4 w-4 mr-2" />
                                  הקודם
                                 </Button>
                               </div>
