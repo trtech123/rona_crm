@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { DataTable } from "../shared/DataTable"
 import { DetailDialog } from "../shared/DetailDialog"
 import type { Response } from "@/lib/temp_types"
-import { mockResponses } from "@/lib/mock-data"
+// import { mockResponses } from "@/lib/mock-data" // Removed mock data import
 import { type ColumnDef, type Row } from "@tanstack/react-table"
 import { MoreHorizontal, ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -151,7 +151,7 @@ export function ResponsesTabView() {
 
   return (
     <div className="space-y-4">
-      <DataTable columns={columns} data={mockResponses} onRowClick={handleRowClick} />
+      <DataTable columns={columns} data={[]} onRowClick={handleRowClick} />
       <DetailDialog
         isOpen={isDialogOpen}
         setIsOpen={setIsDialogOpen}

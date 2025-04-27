@@ -24,7 +24,7 @@ import {
   Pie,
   Cell,
 } from "recharts"
-import { mockPostAnalytics } from "@/lib/mock-data"
+// import { mockPostAnalytics } from "@/lib/mock-data" // Removed mock data import
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -147,7 +147,7 @@ export function DetailDialog({
     },
   }
 
-  const analyticsData = mockPostAnalytics[postId] || []
+  const analyticsData = []
 
   const totalLeads = 50
   const totalResponses = 150
