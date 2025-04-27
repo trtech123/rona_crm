@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+// Remove direct supabase client import if no longer needed here
+// import { supabase } from '@/lib/supabaseClient' 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { signInAction } from '@/app/actions/authActions' // Import the Server Action
 
 export default function Signin() {
   const [email, setEmail] = useState('')
@@ -18,58 +20,43 @@ export default function Signin() {
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo')
 
-  const handleSignin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setMessage(null)
+  const handleSignin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    // Create FormData from the form event
+    const formData = new FormData(e.currentTarget);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      console.log("[Signin Page] Calling signInAction Server Action...");
+      const result = await signInAction(formData); // Call the Server Action
 
-      if (error) {
-        setMessage(error.message)
-        setLoading(false)
-        return
+      if (result.error) {
+        console.error("[Signin Page] Server Action returned error:", result.error);
+        setMessage(result.error);
+        setLoading(false);
+        return;
       }
 
-      console.log("[Signin Page] Sign in successful, session:", data.session)
+      console.log("[Signin Page] Server Action successful.");
 
-      // If there's a specific redirect path, use it
-      if (redirectTo) {
-        console.log("[Signin Page] Redirecting to:", redirectTo)
-        // Use router.push instead of window.location for better navigation
-        router.push(redirectTo)
-        return
-      }
+      // If Server Action is successful, the cookie should be set.
+      // Now navigate the client.
+      const targetPath = redirectTo || '/dashboard'; 
+      console.log(`[Signin Page] Pushing to ${targetPath}...`);
+      router.push(targetPath);
+      // router.refresh(); // Optional: uncomment if you want to force a refresh after push
 
-      // Check profile for questionnaire status
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        throw new Error("No user found after successful signin")
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("questionnaire_completed")
-        .eq("id", user.id)
-        .single()
-
-      // Use router.push instead of window.location for better navigation
-      if (profile?.questionnaire_completed) {
-        console.log("[Signin Page] User has completed questionnaire, redirecting to dashboard")
-        router.push('/dashboard')
-      } else {
-        console.log("[Signin Page] User needs to complete questionnaire")
-        router.push('/questionnaire')
-      }
+      // Keep loading until navigation (potentially) completes
+      // setLoading(false); 
 
     } catch (catchError: any) {
-      console.error("[Signin Page] Unexpected error in handleSignin:", catchError)
-      setMessage(`שגיאה לא צפויה: ${catchError?.message || 'Unknown error'}`)
-      setLoading(false)
+      // This catch block might not be necessary if the server action handles its errors
+      // but kept for safety.
+      console.error("[Signin Page] Error calling Server Action:", catchError);
+      setMessage(`An unexpected error occurred: ${catchError?.message || 'Unknown error'}`);
+      setLoading(false);
     }
   }
 
@@ -78,20 +65,23 @@ export default function Signin() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">התחברות</CardTitle>
-          {message && (
-             <CardDescription>
-               הכנס אימייל וסיסמה כדי להתחבר לחשבונך.
-             </CardDescription>
-          )}
+          <CardDescription>
+            {message ? (
+              <span className="text-red-500">{message}</span>
+            ) : (
+              "הכנס אימייל וסיסמה כדי להתחבר לחשבונך."
+            )}
+          </CardDescription>
         </CardHeader>
         
+        {/* Pass the event to handleSignin */}
         <form onSubmit={handleSignin}>
           <CardContent className="grid gap-4">
             <div className="grid gap-2 text-right">
               <Label htmlFor="email">אימייל</Label>
               <Input
                 id="email"
-                name="email"
+                name="email" // Ensure name attribute is set for FormData
                 type="email"
                 placeholder="m@example.com"
                 required
@@ -104,7 +94,7 @@ export default function Signin() {
               <Label htmlFor="password">סיסמה</Label>
               <Input
                 id="password"
-                name="password"
+                name="password" // Ensure name attribute is set for FormData
                 type="password"
                 required
                 value={password} 
@@ -112,11 +102,7 @@ export default function Signin() {
                 disabled={loading}
               />
             </div>
-            {message && (
-                <p className="text-sm text-center text-red-500" aria-live="polite">
-                    {message}
-                </p>
-            )}
+            {/* Removed explicit message display here as it's in CardDescription now */}
           </CardContent>
           <CardFooter className="flex flex-col items-center space-y-2">
              <Button type="submit" className="w-full" disabled={loading}>

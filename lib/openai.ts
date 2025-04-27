@@ -1,13 +1,18 @@
 import OpenAI from "openai";
 import { PostFormData } from "@/types/post";
-import { supabase } from "./supabase/client"; // Ensure the correct path to the Supabase client
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function generatePost(formData: PostFormData) {
+// Utility to clean markdown code block from OpenAI response
+const cleanJSON = (str: string | null | undefined): string => {
+    if (!str) return '';
+    return str.replace(/^```json\s*|\s*```$/g, "").trim();
+};
+
+export async function generatePost(formData: PostFormData, supabaseClient: SupabaseClient): Promise<any> {
   // 1) Insert form data into the posts_inputs table
   const postInput = {
     post_type: formData.postType,
@@ -29,12 +34,12 @@ export async function generatePost(formData: PostFormData) {
     images: formData.images,
     video_file: formData.videoFile,
     video_link: formData.videoLink,
-    author_id: null, // Set this if you have user context
+    author_id: (await supabaseClient.auth.getUser()).data.user?.id ?? null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabaseClient
     .from("posts_inputs")
     .insert([postInput])
     .select("id");
@@ -56,12 +61,12 @@ export async function generatePost(formData: PostFormData) {
   let completion;
   try {
     completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview", // Consider using a newer model if available like gpt-4o-mini
+      model: "gpt-4-turbo-preview",
       messages: [
         {
           role: "system",
           content:
-            "You are an expert social media content creator specializing in real estate marketing. Create engaging, professional posts that resonate with the target audience while maintaining brand voice and achieving marketing goals.",
+            "You are an expert social media content creator specializing in real estate marketing. Create engaging, professional posts that resonate with the target audience while maintaining brand voice and achieving marketing goals. **Output only a valid JSON object adhering to the requested structure.**",
         },
         {
           role: "user",
@@ -69,51 +74,56 @@ export async function generatePost(formData: PostFormData) {
         },
       ],
       temperature: 0.7,
-      max_tokens: 1000,
-      // Consider adding response_format: { type: "json_object" } if the model supports it
-      // This ensures the response is valid JSON, matching your prompt request.
+      max_tokens: 2000,
+      response_format: { type: "json_object" },
     });
   } catch (err: any) {
-    // Catch specific OpenAI errors if possible
     console.error("❌ OpenAI API error:", err);
     throw new Error(
       "OpenAI call failed: " + (err.message || JSON.stringify(err))
     );
   }
 
-  const content = completion?.choices?.[0]?.message?.content;
+  const rawContent = completion?.choices?.[0]?.message?.content;
 
-  if (!content) {
+  if (!rawContent) {
     console.error("❌ OpenAI returned no content:", completion);
     throw new Error("Failed to generate post content");
   }
 
-  // Parse the response as JSON
+  // Clean and Parse the response as JSON
   let parsedResponse;
   try {
-    parsedResponse = JSON.parse(content);
+    const cleanedContent = cleanJSON(rawContent);
+    parsedResponse = JSON.parse(cleanedContent); 
+    if (!parsedResponse.content || !parsedResponse.hashtags) {
+        console.warn("⚠️ OpenAI JSON response missing expected fields:", parsedResponse);
+    }
   } catch (err) {
-    console.error("❌ Failed to parse OpenAI response as JSON:", content);
-    throw new Error("OpenAI response is not valid JSON");
+    console.error("❌ Failed to parse OpenAI JSON response even after cleaning:", rawContent); 
+    throw new Error("OpenAI response format error.");
   }
 
   // Get the current user
   const {
     data: { user },
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await supabaseClient.auth.getUser();
   if (userError || !user) {
+    console.error("Error getting user in generatePost:", userError);
     throw new Error(userError?.message || "User not authenticated");
   }
 
-  // Insert the generated post into the posts table
-  const { error: postInsertError } = await supabase.from("posts").insert([
+  // Insert the generated post into the posts table using parsed content
+  const { error: postInsertError } = await supabaseClient.from("posts").insert([
     {
       user_id: user.id,
-      content: parsedResponse.content,
+      content: parsedResponse.content || '',
       platform: formData.socialNetwork,
       created_at: new Date().toISOString(),
-      // scheduled_at: ... (add if you have scheduling)
+      hashtags: parsedResponse.hashtags || [],
+      suggested_image_prompt: parsedResponse.suggestedImagePrompt,
+      suggested_cta: parsedResponse.cta,
     },
   ]);
   if (postInsertError) {
@@ -124,8 +134,8 @@ export async function generatePost(formData: PostFormData) {
     throw new Error(`Supabase post insert failed: ${postInsertError.message}`);
   }
 
-  // Optional: return the parsed response
-  return content;
+  // Return the PARSED response object
+  return parsedResponse;
 }
 
 function generatePrompt(formData: PostFormData): string {

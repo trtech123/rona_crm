@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { PostFormData, PostFormSchema, WritingStyle } from "@/types/post";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -40,17 +40,21 @@ const INITIAL_FORM_STATE: PostFormData = {
 export function usePostForm() {
   const [formData, setFormData] = useState<PostFormData>(INITIAL_FORM_STATE);
   const [progress, setProgress] = useState(25);
-  const [activeTab, setActiveTab] = useState("post-type");
+  const [activeTab, setActiveTabState] = useState("post-type");
   const { toast } = useToast();
 
-  const updateFormData = (updates: Partial<PostFormData>) => {
+  const updateFormData = useCallback((updates: Partial<PostFormData>) => {
     setFormData((prev) => {
       const newData = { ...prev, ...updates };
       return newData;
     });
-  };
+  }, [setFormData]);
 
-  const handleNext = () => {
+  const setActiveTab = useCallback((tab: string) => {
+    setActiveTabState(tab);
+  }, [setActiveTabState]);
+
+  const handleNext = useCallback(() => {
     if (formData.step < 4) {
       const nextStep = formData.step + 1;
       updateFormData({ step: nextStep });
@@ -69,9 +73,9 @@ export function usePostForm() {
           break;
       }
     }
-  };
+  }, [formData.step, updateFormData, setActiveTab]);
 
-  const handlePrevious = () => {
+  const handlePrevious = useCallback(() => {
     if (formData.step > 1) {
       const prevStep = formData.step - 1;
       updateFormData({ step: prevStep });
@@ -90,9 +94,9 @@ export function usePostForm() {
           break;
       }
     }
-  };
+  }, [formData.step, updateFormData, setActiveTab]);
 
-  const jumpToStep = (targetStep: number) => {
+  const jumpToStep = useCallback((targetStep: number) => {
     if (targetStep >= 1 && targetStep <= 4) {
       updateFormData({ step: targetStep });
       setProgress(targetStep * 25);
@@ -113,23 +117,23 @@ export function usePostForm() {
           break;
       }
     }
-  };
+  }, [updateFormData, setActiveTab]);
 
-  const handleWritingStyleChange = (style: WritingStyle) => {
+  const handleWritingStyleChange = useCallback((style: WritingStyle) => {
     const newStyles = {
       ...formData.writingStyles,
       [style]: !formData.writingStyles[style],
     };
     updateFormData({ writingStyles: newStyles });
-  };
+  }, [formData.writingStyles, updateFormData]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData(INITIAL_FORM_STATE);
     setProgress(25);
     setActiveTab("post-type");
-  };
+  }, [setFormData, setActiveTab]);
 
-  const validateStep = (step: number): boolean => {
+  const validateStep = useCallback((step: number): boolean => {
     try {
       switch (step) {
         case 1:
@@ -189,7 +193,7 @@ export function usePostForm() {
       });
       return false;
     }
-  };
+  }, [formData, toast]);
 
   return {
     formData,

@@ -24,26 +24,18 @@ import { CTASection } from "./post-creation/cta-section";
 import { ContentCreationSection } from "./post-creation/content-creation-section";
 import { MediaCreationSection } from "./post-creation/media-creation-section";
 import { PostFormData } from "@/types/post";
-import { generatePost } from "@/lib/openai";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePostForm } from "@/hooks/use-post-form";
-
-interface GeneratedContent {
-  content: string;
-  hashtags: string[];
-  suggestedImagePrompt: string;
-  cta: string;
-}
-
-// Utility to clean markdown code block from OpenAI response
-const cleanJSON = (str: string) => str.replace(/```json|```/g, "").trim();
+import { createPostAction, saveDirectPostAction } from "@/app/actions/postActions";
+import { useRouter } from 'next/navigation';
 
 export function PostCreationForm() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedContent, setGeneratedContent] =
-    useState<GeneratedContent | null>(null);
+  const [isSavingDirectly, setIsSavingDirectly] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<any | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   const {
     formData,
@@ -57,24 +49,61 @@ export function PostCreationForm() {
   } = usePostForm();
 
   const handleFinish = async () => {
+    setIsGenerating(true);
+    setGeneratedContent(null);
+    console.log('[Client] handleFinish: Attempting to call createPostAction...');
     try {
-      setIsGenerating(true);
-      const response = await generatePost(formData);
-      const parsedResponse = JSON.parse(cleanJSON(response || "{}"));
-      setGeneratedContent(parsedResponse);
-      toast({
-        title: "Success",
-        description: "Your post has been generated successfully!",
-      });
+      const response = await createPostAction(formData);
+      console.log('[Client] Server action response (AI Generate):', response);
+
+      if (response.success) {
+        toast({
+          title: "הצלחה",
+          description: response.message || "הפוסט נוצר ונשמר בהצלחה!",
+        });
+        console.log('[Client] Redirecting to /posts...');
+        router.push('/posts');
+      } else {
+        toast({
+          title: "שגיאה",
+          description: response.message || "נכשל ביצירת הפוסט.",
+          variant: "destructive",
+        });
+        setIsGenerating(false);
+      }
     } catch (error) {
-      console.error("Error generating post:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate post. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
+      console.error("Error calling AI generate action:", error);
+      toast({ title: "שגיאה", description: "אירעה שגיאה לא צפויה. נסה שוב.", variant: "destructive" });
       setIsGenerating(false);
+    }
+  };
+
+  const handleSaveDirectly = async () => {
+    setIsSavingDirectly(true);
+    console.log('[Client] handleSaveDirectly: Attempting to call saveDirectPostAction...');
+    try {
+      const response = await saveDirectPostAction(formData);
+      console.log('[Client] Server action response (Direct Save):', response);
+
+      if (response.success) {
+        toast({
+          title: "הצלחה",
+          description: response.message || "הפוסט נשמר בהצלחה!",
+        });
+        console.log('[Client] Redirecting to /posts...');
+        router.push('/posts');
+      } else {
+        toast({
+          title: "שגיאה",
+          description: response.message || "נכשל בשמירת הפוסט.",
+          variant: "destructive",
+        });
+        setIsSavingDirectly(false);
+      }
+    } catch (error) {
+      console.error("Error calling direct save action:", error);
+      toast({ title: "שגיאה", description: "אירעה שגיאה לא צפויה. נסה שוב.", variant: "destructive" });
+      setIsSavingDirectly(false);
     }
   };
 
@@ -224,7 +253,16 @@ export function PostCreationForm() {
         <div className="space-y-6">
           <CTASection formData={formData} onUpdate={updateFormData} />
 
-          {generatedContent && (
+          {isGenerating && (
+            <Card>
+              <CardContent className="p-6 flex items-center justify-center min-h-[200px]">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                <p className="ml-3 text-lg">Generating your post...</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!isGenerating && generatedContent && (
             <Card>
               <CardContent className="p-6 space-y-4">
                 <div className="prose max-w-none">
@@ -233,13 +271,15 @@ export function PostCreationForm() {
                     {generatedContent.content}
                   </p>
 
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {generatedContent.hashtags.map((tag, index) => (
-                      <span key={index} className="text-blue-500">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
+                  {generatedContent.hashtags && Array.isArray(generatedContent.hashtags) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {generatedContent.hashtags.map((tag: string, index: number) => (
+                        <span key={index} className="text-blue-500">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {generatedContent.suggestedImagePrompt && (
                     <div className="mt-4">
@@ -252,12 +292,14 @@ export function PostCreationForm() {
                     </div>
                   )}
 
-                  <div className="mt-4">
-                    <h4 className="text-sm font-semibold">Suggested CTA:</h4>
-                    <p className="text-sm text-gray-600">
-                      {generatedContent.cta}
-                    </p>
-                  </div>
+                  {generatedContent.cta && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-semibold">Suggested CTA:</h4>
+                      <p className="text-sm text-gray-600">
+                        {generatedContent.cta}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -265,20 +307,37 @@ export function PostCreationForm() {
         </div>
       )}
 
-      <div className="flex justify-end mt-6">
+      <div className="flex justify-end mt-6 space-x-2 rtl:space-x-reverse">
+        {formData.step === FORM_STEPS.FINAL_POST && (
+           <Button
+            variant="outline"
+            onClick={handleSaveDirectly}
+            disabled={isSavingDirectly || isGenerating} 
+           >
+            {isSavingDirectly ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                שומר...
+              </>
+            ) : (
+              "שמור פוסט ישירות"
+            )}
+           </Button>
+        )}
+
         {formData.step === FORM_STEPS.FINAL_POST ? (
           <Button
             onClick={handleFinish}
-            disabled={isGenerating}
+            disabled={isGenerating || isSavingDirectly}
             className="bg-purple-600 hover:bg-purple-700 text-white"
           >
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
+                יוצר עם AI...
               </>
             ) : (
-              "Generate Post"
+              "צור עם AI"
             )}
           </Button>
         ) : (

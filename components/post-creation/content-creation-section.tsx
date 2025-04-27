@@ -10,10 +10,14 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
-import { PostFormData } from "@/types/post"
-import { PenTool, Mic, Wand2, MessageSquare, Image as ImageIcon } from "lucide-react"
+import { PostFormData, WritingStyle, WritingStyleSchema } from "@/types/post"
+import { PenTool, Mic, Wand2, MessageSquare, Image as ImageIcon, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useVoiceRecording } from "@/hooks/use-voice-recording"
+import { generateSuggestionsAction } from "@/app/actions/suggestionActions"
+
+// Define all possible writing styles using the Zod schema
+const ALL_WRITING_STYLES = Object.values(WritingStyleSchema.Values);
 
 interface ContentCreationSectionProps {
   formData: PostFormData
@@ -58,27 +62,47 @@ export function ContentCreationSection({ formData, onUpdate }: ContentCreationSe
   }
 
   const handleGenerateContent = async () => {
-    setIsGenerating(true)
+    if (!aiPrompt) return;
+
+    setIsGenerating(true);
+    setAiResponse("");
+    console.log('[Client] Calling generateSuggestionsAction...');
     try {
-      // TODO: Implement actual AI content generation
-      // For now, we'll use a placeholder response
-      setTimeout(() => {
-        const generatedContent = "זהו תוכן לדוגמה שנוצר על ידי ה-AI. בפועל, כאן יהיה תוכן אמיתי שנוצר על ידי מודל שפה מתקדם."
-        setAiResponse(generatedContent)
-        setIsGenerating(false)
-      }, 2000)
-    } catch (error) {
-      console.error("Error generating content:", error)
-      setIsGenerating(false)
+      // Ensure writingStyles is a complete record with defaults
+      const completeWritingStyles = ALL_WRITING_STYLES.reduce((acc: Record<WritingStyle, boolean>, style) => {
+        acc[style] = formData.writingStyles[style as WritingStyle] ?? false;
+        return acc;
+      }, {} as Record<WritingStyle, boolean>);
+
+      const params = {
+        userPrompt: aiPrompt,
+        targetAudience: formData.targetAudience,
+        writingStyles: completeWritingStyles,
+        customWritingStyle: formData.customWritingStyle,
+        wordCount: wordCount,
+      };
+      const response = await generateSuggestionsAction(params);
+      console.log('[Client] Suggestion action response:', response);
+
+      if (response.success && response.data) {
+        setAiResponse(response.data);
+      } else {
+        setAiResponse(`Error: ${response.message || 'Failed to get suggestions.'}`);
+      }
+    } catch (error: any) {
+      console.error("Error calling suggestion action:", error);
+      setAiResponse(`Error: ${error.message || 'An unexpected error occurred.'}`);
+    } finally {
+      setIsGenerating(false);
     }
-  }
+  };
 
   const handleApplyContent = () => {
-    if (aiResponse) {
-      onUpdate({ contentGoal: aiResponse })
-      setIsAIDialogOpen(false)
+    if (aiResponse && !aiResponse.startsWith("Error:")) {
+      onUpdate({ contentGoal: aiResponse });
+      setIsAIDialogOpen(false);
     }
-  }
+  };
 
   const handleContentChange = (value: string) => {
     onUpdate({ content: value })
@@ -287,8 +311,13 @@ export function ContentCreationSection({ formData, onUpdate }: ContentCreationSe
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="bg-gray-100 p-4 rounded-md min-h-[200px] max-h-[300px] overflow-y-auto">
-              {aiResponse ? (
-                <p>{aiResponse}</p>
+              {isGenerating ? (
+                <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                    <p className="ml-2">Generating...</p>
+                </div>
+              ) : aiResponse ? (
+                <p className={`${aiResponse.startsWith('Error:') ? 'text-red-600' : ''} whitespace-pre-wrap`}>{aiResponse}</p>
               ) : (
                 <p className="text-gray-500">התשובה תופיע כאן...</p>
               )}
@@ -299,17 +328,22 @@ export function ContentCreationSection({ formData, onUpdate }: ContentCreationSe
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
                 className="flex-1"
+                disabled={isGenerating}
               />
-              <Button onClick={handleGenerateContent} disabled={isGenerating}>
-                {isGenerating ? "מעבד..." : "שלח"}
+              <Button onClick={handleGenerateContent} disabled={isGenerating || !aiPrompt}>
+                {isGenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "שלח"
+                )}
               </Button>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAIDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsAIDialogOpen(false)} disabled={isGenerating}>
               סגור
             </Button>
-            <Button onClick={handleApplyContent} disabled={!aiResponse}>
+            <Button onClick={handleApplyContent} disabled={isGenerating || !aiResponse || aiResponse.startsWith("Error:")}>
               החל תוכן
             </Button>
           </DialogFooter>

@@ -24,10 +24,10 @@ const DashboardLayout = ({ children }: { children?: React.ReactNode }) => { // M
         {/* Header */}
         <DashboardHeader />
 
-        {/* Main Content - passes activeSection and setActiveSection down */}
+        {/* Main Content - Should ONLY render children from the specific page route */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 md:p-6 lg:p-8">
-           <DashboardMain activeSection={activeSection} setActiveSection={setActiveSection} />
-           {/* Render children if provided, though DashboardMain handles content now */}
+           {/* <DashboardMain activeSection={activeSection} setActiveSection={setActiveSection} /> */}
+           {/* Render children passed from the page file (e.g., PostsPage content or DashboardPage content) */}
            {children}
         </main>
       </div>
