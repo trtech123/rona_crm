@@ -1,4 +1,4 @@
-import { supabase } from './client'
+import { supabase } from "./client";
 
 /**
  * Uploads a file to Supabase storage and returns the public URL
@@ -6,25 +6,31 @@ import { supabase } from './client'
 async function uploadFile(
   file: File,
   bucket: string,
-  path: string,
+  path: string
 ): Promise<string> {
   const { data, error } = await supabase.storage
     .from(bucket)
     .upload(path, file, {
-      cacheControl: '3600',
+      cacheControl: "3600",
       upsert: false,
-    })
+    });
 
   if (error) {
-    console.error('Error uploading file:', error)
-    throw new Error(`Error uploading file: ${error.message}`)
+    console.error(
+      `Error uploading file to Supabase Storage.\nBucket: ${bucket}\nPath: ${path}\nFile: ${
+        file.name
+      } (${file.size} bytes)\nError: ${JSON.stringify(error, null, 2)}`
+    );
+    throw new Error(
+      `Error uploading file: ${error.message || JSON.stringify(error)}`
+    );
   }
 
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(path)
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(bucket).getPublicUrl(path);
 
-  return publicUrl
+  return publicUrl;
 }
 
 /**
@@ -33,15 +39,17 @@ async function uploadFile(
 async function uploadFiles(
   files: File[],
   bucket: string,
-  basePath: string,
+  basePath: string
 ): Promise<string[]> {
   const uploadPromises = files.map((file) => {
-    const fileExt = file.name.split('.').pop()
-    const path = `${basePath}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-    return uploadFile(file, bucket, path)
-  })
+    const fileExt = file.name.split(".").pop();
+    const path = `${basePath}/${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(7)}.${fileExt}`;
+    return uploadFile(file, bucket, path);
+  });
 
-  return Promise.all(uploadPromises)
+  return Promise.all(uploadPromises);
 }
 
 /**
@@ -50,44 +58,45 @@ async function uploadFiles(
 export async function uploadPostMedia(
   images: File[],
   videoFile: File | null,
-  userId: string,
+  userId: string
 ): Promise<{
-  imageUrls: string[]
-  videoUrl: string | null
+  imageUrls: string[];
+  videoUrl: string | null;
 }> {
   const results = {
     imageUrls: [] as string[],
     videoUrl: null as string | null,
-  }
+  };
 
   // Upload images if any
   if (images.length > 0) {
-    results.imageUrls = await uploadFiles(images, 'post_media', `${userId}/images`)
+    results.imageUrls = await uploadFiles(
+      images,
+      "profile_media",
+      `${userId}/images`
+    );
   }
 
   // Upload video if any
   if (videoFile) {
-    const fileExt = videoFile.name.split('.').pop()
-    const path = `${userId}/videos/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`
-    results.videoUrl = await uploadFile(videoFile, 'post_media', path)
+    const fileExt = videoFile.name.split(".").pop();
+    const path = `${userId}/videos/${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(7)}.${fileExt}`;
+    results.videoUrl = await uploadFile(videoFile, "profile_media", path);
   }
 
-  return results
+  return results;
 }
 
 /**
  * Deletes a file from Supabase storage
  */
-export async function deleteFile(
-  bucket: string,
-  path: string,
-): Promise<void> {
-  const { error } = await supabase.storage
-    .from(bucket)
-    .remove([path])
+export async function deleteFile(bucket: string, path: string): Promise<void> {
+  const { error } = await supabase.storage.from(bucket).remove([path]);
 
   if (error) {
-    console.error('Error deleting file:', error)
-    throw new Error(`Error deleting file: ${error.message}`)
+    console.error("Error deleting file:", error);
+    throw new Error(`Error deleting file: ${error.message}`);
   }
-} 
+}
