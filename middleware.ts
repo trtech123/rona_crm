@@ -57,7 +57,9 @@ export async function middleware(request: NextRequest) {
   if (url.pathname === '/auth/loading' || 
       url.pathname === '/signin' ||
       url.pathname === '/dashboard' ||
-      url.pathname.startsWith('/dashboard/')) {
+      url.pathname.startsWith('/dashboard/') ||
+      url.pathname === '/post-creation' ||
+      url.pathname.startsWith('/post-creation/')) {
     console.log(`[Middleware] Skipping middleware for ${url.pathname}`);
     return NextResponse.next();
   }
@@ -115,6 +117,7 @@ export async function middleware(request: NextRequest) {
   if (!session && protectedRoutes.some(route => pathname.startsWith(route))) {
     console.log("[Middleware] No session, accessing protected route -> Redirecting to /signin");
     const redirectUrl = new URL('/signin', request.url);
+    redirectUrl.searchParams.set('redirectTo', pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
