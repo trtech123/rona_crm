@@ -120,16 +120,19 @@ export type Post = z.infer<typeof PostSchema>
 // Interface for displaying posts in the dashboard
 // Combines DB fields with UI helper fields
 export interface PostDisplayData extends Post {
-  id: string; // uuid from posts table (already in Post type)
-  user_id?: string; // uuid from posts table (add if needed, not in base Post type)
-  content: string; // text (already in Post type)
-  platform?: string; // text
-  created_at: string; // timestamptz (use createdAt from base Post type)
-  updated_at?: string; // timestamptz (use updatedAt from base Post type)
-  scheduled_at?: string; // timestamptz
-  hashtags?: string[]; // array
-  suggested_image_prompt?: string; // text
-  suggested_cta?: string; // text
+  id: string;
+  user_id?: string;
+  content: string;
+  platform?: string;
+  created_at: string;
+  updated_at?: string;
+  scheduled_at?: string;
+  published?: boolean;
+  published_at?: string;
+  facebook_post_url?: string;
+  hashtags?: string[];
+  suggested_image_prompt?: string;
+  suggested_cta?: string;
   // Helper properties
   platformColor?: string;
   icon?: React.ElementType;

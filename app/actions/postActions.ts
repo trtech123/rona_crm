@@ -279,3 +279,143 @@ export async function updatePostAction(
   // but good practice for typing if redirect wasn't used.
   // return { success: true, message: 'Post updated successfully', updatedPost: updatedData as Post };
 } 
+
+export async function publishPostAction(postId: string): Promise<{ success: boolean; message?: string }> {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value; },
+        set(name: string, value: string, options: any) { try { cookieStore.set({ name, value, ...options }); } catch (e) {} },
+        remove(name: string, options: any) { try { cookieStore.set({ name, value: '', ...options }); } catch (e) {} },
+      },
+    }
+  );
+
+  // Get user session
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error("Error getting user or user not logged in:", userError);
+    return { success: false, message: "Authentication required" };
+  }
+
+  try {
+    // Update the post's published status and published_at timestamp
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ 
+        published: true,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .match({ id: postId, user_id: user.id });
+
+    if (updateError) {
+      console.error("Error publishing post:", updateError);
+      return { success: false, message: "Failed to publish post" };
+    }
+
+    // Revalidate the posts page to show updated status
+    revalidatePath('/dashboard/articles');
+    
+    return { success: true, message: "Post published successfully" };
+  } catch (error: any) {
+    console.error("Error in publishPostAction:", error);
+    return { success: false, message: error.message || "An unexpected error occurred" };
+  }
+} 
+
+export async function publishToAyrshareAction(postId: string): Promise<{ success: boolean; message?: string }> {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value; },
+        set(name: string, value: string, options: any) { try { cookieStore.set({ name, value, ...options }); } catch (e) {} },
+        remove(name: string, options: any) { try { cookieStore.set({ name, value: '', ...options }); } catch (e) {} },
+      },
+    }
+  );
+
+  // Get user session
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    console.error("Error getting user or user not logged in:", userError);
+    return { success: false, message: "Authentication required" };
+  }
+
+  try {
+    // First, get the post content
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .select('*')
+      .match({ id: postId, user_id: user.id })
+      .single();
+
+    if (postError || !post) {
+      console.error("Error fetching post:", postError);
+      return { success: false, message: "Post not found" };
+    }
+
+    // Prepare the Ayrshare API request
+    const ayrshareResponse = await fetch("https://api.ayrshare.com/api/post", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.AYRSHARE_API_KEY}`
+      },
+      body: JSON.stringify({
+        post: post.content,
+        platforms: ["facebook"], // We're only publishing to Facebook for now
+        mediaUrls: post.images || [] // Include any images if they exist
+      }),
+    });
+
+    if (!ayrshareResponse.ok) {
+      const errorData = await ayrshareResponse.json();
+      console.error("Ayrshare API error:", errorData);
+      return { success: false, message: "Failed to publish to social media" };
+    }
+
+    const ayrshareData = await ayrshareResponse.json();
+    
+    // Extract the Facebook post URL from the Ayrshare response
+    // The URL format might be in the response data, adjust as needed based on Ayrshare's API response
+    const facebookPostUrl = ayrshareData.facebook?.url || ayrshareData.postUrl || null;
+    
+    if (!facebookPostUrl) {
+      console.error("No Facebook post URL found in Ayrshare response:", ayrshareData);
+      return { success: false, message: "Failed to get Facebook post URL" };
+    }
+
+    // Update the post's published status and published_at timestamp
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ 
+        published: true,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        facebook_post_url: facebookPostUrl // Store the Facebook post URL
+      })
+      .match({ id: postId, user_id: user.id });
+
+    if (updateError) {
+      console.error("Error updating post status:", updateError);
+      return { success: false, message: "Failed to update post status" };
+    }
+
+    // Revalidate the posts page to show updated status
+    revalidatePath('/dashboard/articles');
+    
+    return { success: true, message: "Post published to Facebook successfully" };
+  } catch (error: any) {
+    console.error("Error in publishToAyrshareAction:", error);
+    return { success: false, message: error.message || "An unexpected error occurred" };
+  }
+} 
