@@ -79,12 +79,36 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error processing webhook data:', error);
+    console.error('--- ERROR PROCESSING WEBHOOK DATA ---');
+    console.error('Timestamp:', new Date().toISOString());
+    
+    // Log the error object itself
+    console.error('Caught Error Object:', error);
+    
+    // Attempt to log specific properties if it's an Error instance
+    if (error instanceof Error) {
+      console.error('Error Name:', error.name);
+      console.error('Error Message:', error.message);
+      if (error.stack) {
+        console.error('Error Stack:', error.stack);
+      }
+    }
+    
+    // Log as stringified JSON for potentially more details
+    try {
+      console.error('Error Stringified:', JSON.stringify(error, null, 2));
+    } catch (stringifyError) {
+      console.error('Could not stringify the error object.');
+    }
+    console.error('--- END ERROR --- ');
+
+    // Return an error response
     return NextResponse.json(
       { 
         success: false, 
         message: 'Error processing webhook data',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        // Keep the original error message reporting for the response
+        error: error instanceof Error ? error.message : 'Unknown error' 
       },
       { status: 500 }
     );
