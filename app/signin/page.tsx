@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 // Remove direct supabase client import if no longer needed here
 // import { supabase } from '@/lib/supabaseClient' 
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,14 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { signInAction } from '@/app/actions/authActions' // Import the Server Action
 
 export default function Signin() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SigninContent />
+    </Suspense>
+  );
+}
+
+function SigninContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
