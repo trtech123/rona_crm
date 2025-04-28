@@ -1,68 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
+/**
+ * API endpoint to receive webhook data from Make.com
+ * This endpoint will log the received data to the console
+ * and can be extended to process the data as needed
+ */
 export async function POST(request: NextRequest) {
   try {
-    // Parse the request body
-    const body = await request.json();
+    // Parse the JSON data from the request body
+    const data = await request.json();
     
-    // Extract the post ID and Facebook post ID from the request
-    const { post_id, facebook_post_id } = body;
+    // Log the entire payload to the console
+    console.log('Received webhook data from Make.com:', JSON.stringify(data, null, 2));
     
-    if (!post_id || !facebook_post_id) {
-      return NextResponse.json(
-        { error: 'Missing required fields: post_id and facebook_post_id' },
-        { status: 400 }
-      );
+    // Extract and log specific fields
+    if (data.comments) {
+      console.log('Comments from Make.com:', data.comments);
     }
     
-    // Initialize Supabase client
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) { return cookieStore.get(name)?.value; },
-          set(name: string, value: string, options: any) { try { cookieStore.set({ name, value, ...options }); } catch (e) {} },
-          remove(name: string, options: any) { try { cookieStore.set({ name, value: '', ...options }); } catch (e) {} },
-        },
-      }
-    );
-    
-    // Update the post with the Facebook post ID
-    const { error: updateError } = await supabase
-      .from('posts')
-      .update({ 
-        facebook_post_id,
-        published: true,
-        published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', post_id);
-    
-    if (updateError) {
-      console.error('Error updating post with Facebook post ID:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update post with Facebook post ID' },
-        { status: 500 }
-      );
+    if (data.post_id) {
+      console.log('Post ID:', data.post_id);
     }
     
-    // Return success response
+    if (data.content) {
+      console.log('Content:', data.content);
+    }
+    
+    // Return a success response
     return NextResponse.json({ 
       success: true, 
-      message: 'Post updated with Facebook post ID',
-      post_id,
-      facebook_post_id
+      message: 'Webhook data received successfully' 
     });
-    
   } catch (error) {
-    console.error('Error processing Make.com webhook:', error);
+    // Log any errors that occur
+    console.error('Error processing webhook data:', error);
+    
+    // Return an error response
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        success: false, 
+        message: 'Error processing webhook data',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
+}
+
+/**
+ * Handle GET requests to the webhook endpoint
+ * This can be useful for testing or verification
+ */
+export async function GET() {
+  return NextResponse.json({ 
+    status: 'Webhook endpoint is active',
+    message: 'Send POST requests to this endpoint with your data'
+  });
 } 

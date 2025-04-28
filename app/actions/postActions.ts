@@ -369,9 +369,8 @@ export async function publishToMakeAction(postId: string): Promise<{ success: bo
     
     // Prepare the data to send to Make.com
     const makePayload = {
-      message: postData.content.replace(/\n\n/g, ' '), // Remove double newlines and replace with space
-      // Include other fields as metadata if needed
       post_id: postData.id,
+      content: postData.content, // This will be mapped to the message field in Facebook
       platform: postData.platform,
       user_id: user.id,
       facebook_page_id: process.env.FACEBOOK_PAGE_ID,
