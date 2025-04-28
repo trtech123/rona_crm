@@ -35,6 +35,7 @@ import {
 
 // Import the PostPublishStatus component
 import { PostPublishStatus } from '@/components/post-publish-status';
+import { PostComments } from '@/components/post-comments';
 
 // Adjusted FilterState for Posts
 interface FilterState {
@@ -351,6 +352,14 @@ export default function PostsDashboardPage() { // Renamed component conceptually
                   {/* Display full content */}
                   {selectedPostForView?.content}
                 </div>
+
+                {/* Add the PostComments component */}
+                {selectedPostForView && (
+                  <div className="mt-6">
+                    <PostComments postId={selectedPostForView.id} />
+                  </div>
+                )}
+
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button type="button" variant="secondary">

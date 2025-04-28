@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { saveCommentFromMakeAction } from '@/app/actions/commentActions';
 
 /**
  * API endpoint to receive webhook data from Make.com
  * This endpoint will log the received data to the console
- * and can be extended to process the data as needed
+ * and save comments to the database
  */
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,22 @@ export async function POST(request: NextRequest) {
     // Extract and log specific fields
     if (data.comments) {
       console.log('Comments from Make.com:', data.comments);
+      
+      // If we have a post_id and comments, save them to the database
+      if (data.post_id && typeof data.comments === 'string') {
+        const result = await saveCommentFromMakeAction(
+          data.post_id,
+          data.comments,
+          'make',
+          { original_data: data }
+        );
+        
+        if (!result.success) {
+          console.error('Failed to save comment from Make.com:', result.message);
+        } else {
+          console.log('Comment saved successfully:', result.comment?.id);
+        }
+      }
     }
     
     if (data.post_id) {
