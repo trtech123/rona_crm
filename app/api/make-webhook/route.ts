@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`Attempting to update post with UUID: ${postUuid} with platform_post_id: ${platformPostId}`);
+    console.log(`Attempting to update post with UUID: ${postUuid} with post_id: ${platformPostId}`);
 
     // Update the post in the Supabase 'posts' table
     const { data: updateData, error: updateError } = await supabase
       .from('posts')
       .update({ 
-        platform_post_id: platformPostId, // Assuming you have a column named 'platform_post_id'
+        post_id: platformPostId, // Use the correct column name 'post_id'
         // published: true, // Optionally update published status here as well if Make confirms success
         // published_at: new Date().toISOString(), // Optionally set publish time
         updated_at: new Date().toISOString(), // Always update the timestamp
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    console.log(`Successfully updated post ${postUuid} with platform_post_id ${platformPostId}`);
+    console.log(`Successfully updated post ${postUuid} with post_id ${platformPostId}`);
 
     return NextResponse.json({ 
       success: true, 
