@@ -2,22 +2,19 @@
 
 import React, { useState } from 'react';
 import DashboardHeader from './DashboardHeader';
-import DashboardSidebar from './DashboardSidebar';
+import { DashboardSidebar } from './DashboardSidebar';
 import DashboardMain from './DashboardMain'; // Import DashboardMain
 
 // Define the possible sections
 export type DashboardSection = 'dashboard' | 'leads' | 'comments' | 'tasks' | 'events' | 'articles' | 'settings' | 'profile' | 'aiAutomations';
 
 const DashboardLayout = ({ children }: { children?: React.ReactNode }) => { // Make children optional for now
-  const [activeSection, setActiveSection] = useState<DashboardSection>('dashboard'); // Default to dashboard view
+  // const [activeSection, setActiveSection] = useState<DashboardSection>('dashboard'); // Remove state, sidebar handles active state internally
 
   return (
     <div className="flex h-screen bg-gray-50" dir="rtl"> {/* Restored dir="rtl" to keep sidebar on right */}
-      {/* Sidebar */}
-      <DashboardSidebar
-        activeSection={activeSection}
-        setActiveSection={setActiveSection}
-      />
+      {/* Sidebar - Remove props as the component doesn't accept them */}
+      <DashboardSidebar />
 
       {/* Main Content Area (Header + Main) */}
       <div className="flex-1 flex flex-col overflow-hidden">
