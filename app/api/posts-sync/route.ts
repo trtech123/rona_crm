@@ -20,9 +20,12 @@ const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl,
  * NOTE: This endpoint is publicly accessible.
  */
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  console.log(`[${new Date(startTime).toISOString()}] Public Posts Sync API: Received GET request.`);
 
   // Check if Supabase client was initialized
   if (!supabase) {
+    console.error(`[${new Date().toISOString()}] Public Posts Sync API: Error - Supabase client not initialized (missing env vars?).`);
     return NextResponse.json(
         { success: false, message: 'Server configuration error: Supabase client not initialized.' }, 
         { status: 500 }
@@ -31,13 +34,13 @@ export async function GET(request: NextRequest) {
 
   // --- Fetch Data ---  
   try {
-    console.log('Public Posts Sync API: Request received. Fetching posts...'); // Updated log
-    const { data, error } = await supabase
+    console.log(`[${new Date().toISOString()}] Public Posts Sync API: Attempting to fetch posts from Supabase...`);
+    const { data, error, status } = await supabase
       .from('posts')
       .select('id, post_id'); // Select only the necessary columns
 
     if (error) {
-      console.error('Public Posts Sync API: Supabase fetch error:', error); // Updated log
+      console.error(`[${new Date().toISOString()}] Public Posts Sync API: Supabase fetch error. Status: ${status}. Error:`, error);
       throw error; // Let the main catch block handle it
     }
 
@@ -47,11 +50,34 @@ export async function GET(request: NextRequest) {
       post_id: post.post_id // This will be null if not set
     })) || [];
 
-    console.log(`Public Posts Sync API: Successfully fetched ${responseData.length} posts.`); // Updated log
+    const duration = Date.now() - startTime;
+    console.log(`[${new Date().toISOString()}] Public Posts Sync API: Successfully fetched ${responseData.length} posts in ${duration}ms.`);
+    
+    // Optionally log the first few results for verification if needed (be careful with large datasets)
+    // if (responseData.length > 0) {
+    //   console.log('[DEBUG] First post data:', responseData[0]);
+    // }
+
     return NextResponse.json({ success: true, posts: responseData });
 
   } catch (error) {
-    console.error('Public Posts Sync API: Error fetching post data:', error); // Updated log
+    const errorDuration = Date.now() - startTime;
+    console.error(`[${new Date().toISOString()}] --- Public Posts Sync API: ERROR after ${errorDuration}ms ---`);
+    console.error('Caught Error Object:', error);
+    if (error instanceof Error) {
+      console.error('Error Name:', error.name);
+      console.error('Error Message:', error.message);
+      if (error.stack) {
+        console.error('Error Stack:', error.stack);
+      }
+    }
+    try {
+      console.error('Error Stringified:', JSON.stringify(error, null, 2));
+    } catch (stringifyError) {
+      console.error('Could not stringify the error object.');
+    }
+    console.error('--- END ERROR --- ');
+
     return NextResponse.json(
       { 
         success: false, 
