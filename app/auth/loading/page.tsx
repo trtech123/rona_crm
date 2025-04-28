@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthLoading() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AuthLoadingContent />
+    </Suspense>
+  );
+}
+
+function AuthLoadingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
