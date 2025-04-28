@@ -1,105 +1,141 @@
 "use client";
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-    Users, // For Leads
-    MessageSquare, // For Comments
-    Calendar, // For Events
-    FileText, // For Articles
-    CheckSquare, // For Tasks (NEW)
-    Settings, // For Settings (NEW)
-    Home, // For Dashboard Home (NEW)
-    LogOut, // For Logout/Settings
-    Heart, // Placeholder icon, replace if needed
-    User, // For Profile
-    Sparkles, // Added for AI Automations
-    ClipboardList, // Added for Post Creation
-    Bot, // Added for AI Automations
-    PlusCircle, // Added for Post Creation
-    LayoutGrid // Example icon for "My Creations"
-} from 'lucide-react';
-// Removed DashboardSection import as setActiveSection might be removed or changed
-// import { DashboardSection } from './DashboardLayout'; 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation'; // Import usePathname
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import {
+  Home,
+  LayoutGrid,
+  Users,
+  ClipboardList,
+  Calendar,
+  FileText,
+  Bot,
+  PlusCircle,
+  Settings,
+  User,
+  MessageSquare,
+} from 'lucide-react';
+import {
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+} from '@/components/ui/sidebar';
 
-// Removed SidebarProps interface as props might change
-// interface SidebarProps {
-//     activeSection: DashboardSection;
-//     setActiveSection: (section: DashboardSection) => void;
-// }
+interface NavItem {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+  href: string;
+  subItems?: {
+    id: string;
+    name: string;
+    href: string;
+  }[];
+}
 
-// Define navigation items with href for routing
-// Map ids to likely routes based on folder structure
-const navItems = [
+const navItems: NavItem[] = [
     { id: 'dashboard', name: 'לוח בקרה', icon: Home, href: '/dashboard' },
     { id: 'posts', name: 'היצירות שלי', icon: LayoutGrid, href: '/posts' }, 
-    { id: 'leads', name: 'לידים', icon: Users, href: '/dashboard/leads' }, // Assuming nested route
-    { id: 'comments', name: 'תגובות', icon: MessageSquare, href: '/dashboard/comments' }, // Assuming nested route
-    { id: 'tasks', name: 'משימות', icon: ClipboardList, href: '/dashboard/tasks' }, // Assuming nested route
-    { id: 'events', name: 'אירועים', icon: Calendar, href: '/dashboard/events' }, // Placeholder route
-    { id: 'articles', name: 'מאמרים', icon: FileText, href: '/dashboard/articles' }, // Assuming nested route
-    { id: 'aiAutomations', name: 'אוטומציות AI', icon: Bot, href: '/dashboard/ai-automations' }, // Placeholder route
+    { 
+        id: 'leads', 
+        name: 'לידים', 
+        icon: Users, 
+        href: '/dashboard/leads',
+        subItems: [
+            { id: 'leads-list', name: 'רשימת לידים', href: '/dashboard/leads' },
+            { id: 'comments', name: 'תגובות', href: '/dashboard/comments' }
+        ]
+    },
+    { id: 'tasks', name: 'משימות', icon: ClipboardList, href: '/dashboard/tasks' },
+    { id: 'events', name: 'אירועים', icon: Calendar, href: '/dashboard/events' },
+    { id: 'articles', name: 'מאמרים', icon: FileText, href: '/dashboard/articles' },
+    { id: 'aiAutomations', name: 'אוטומציות AI', icon: Bot, href: '/dashboard/ai-automations' },
     { id: 'postCreation', name: 'יצירת פוסט', icon: PlusCircle, href: '/post-creation' },
-    { id: 'settings', name: 'הגדרות', icon: Settings, href: '/settings' }, // Placeholder route
-    { id: 'profile', name: 'פרופיל', icon: User, href: '/profile' }, // Placeholder route
+    { id: 'settings', name: 'הגדרות', icon: Settings, href: '/settings' },
+    { id: 'profile', name: 'פרופיל', icon: User, href: '/profile' },
 ];
 
-// Separate settings item for the bottom
-const settingsItem = { id: 'settings', name: 'הגדרות', icon: Settings };
+export function DashboardSidebar() {
+  const pathname = usePathname();
 
-// const DashboardSidebar = ({ activeSection, setActiveSection }: SidebarProps) => {
-const DashboardSidebar = () => { // Remove props for now
-    const pathname = usePathname(); // Get current pathname
-
-    // Function to determine if a link is active (handles exact and partial matches)
-    const isActive = (href: string) => {
-        if (href === '/dashboard') {
-             // Exact match for the main dashboard
-             return pathname === href;
-        }
-        // StartsWith for nested routes, ensuring it doesn't match the main dashboard unintentionally
-        return pathname.startsWith(href) && href !== '/dashboard';
-    };
-
-    return (
-        <aside className="w-64 bg-white shadow-md flex flex-col h-full">
-            {/* Logo/Brand */}
-            <div className="p-4 border-b border-gray-200">
-                <h1 className="text-xl font-bold text-purple-700 text-center">מערכת ניהול</h1>
-            </div>
-
-            {/* Navigation */}
-            <nav className="flex-1 mt-4 space-y-1 px-2">
-                {navItems.map((item) => {
-                    // ALL items should now be Links
-                    return (
-                        <Link key={item.id} href={item.href || '#'} passHref> {/* Add fallback href just in case */}
-                            <Button
-                                variant="ghost"
-                                className={`w-full justify-start px-3 py-2.5 h-auto relative rounded-lg transition-colors duration-150 text-sm font-medium
-                                    ${isActive(item.href || '#') // Use isActive function based on href
-                                        ? 'bg-purple-100 text-purple-700'
-                                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                                    }`}
-                                // Removed onClick={setActiveSection}
-                            >
-                                <item.icon className="ml-3 h-5 w-5" /> 
-                                {item.name}
-                            </Button>
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <Link href="/dashboard" className="flex items-center gap-2 px-4 py-2">
+          <span className="text-lg font-semibold">Rona CRM</span>
+        </Link>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarMenu>
+          {navItems.map((item) => (
+            <SidebarMenuItem key={item.id}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href || item.subItems?.some(subItem => pathname === subItem.href)}
+                tooltip={item.name}
+              >
+                <Link href={item.href}>
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.name}</span>
+                </Link>
+              </SidebarMenuButton>
+              {item.subItems && (
+                <SidebarMenuSub>
+                  {item.subItems.map((subItem) => (
+                    <SidebarMenuSubItem key={subItem.id}>
+                      <SidebarMenuSubButton
+                        asChild
+                        isActive={pathname === subItem.href}
+                      >
+                        <Link href={subItem.href}>
+                          <span>{subItem.name}</span>
                         </Link>
-                    );
-                })}
-            </nav>
-
-            {/* Optional Footer/User Info */}
-            <div className="p-4 mt-auto border-t border-gray-200">
-                <p className="text-xs text-gray-500 text-center">© 2024 Rona AI</p>
-            </div>
-        </aside>
-    );
-};
-
-export default DashboardSidebar; 
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              )}
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === '/settings'}
+              tooltip="הגדרות"
+            >
+              <Link href="/settings">
+                <Settings className="h-4 w-4" />
+                <span>הגדרות</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === '/profile'}
+              tooltip="פרופיל"
+            >
+              <Link href="/profile">
+                <User className="h-4 w-4" />
+                <span>פרופיל</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+} 

@@ -6,11 +6,14 @@ import { User } from '@supabase/supabase-js';
  */
 export interface Comment {
   id: string;
-  post_id: string;
   content: string;
-  source?: string;
-  external_id?: string;
   created_at: string;
+  post_id: string;
+  source?: string;
+  author_id?: string;
+  author_name?: string;
+  author_avatar_url?: string;
+  external_id?: string;
   updated_at: string;
   user_id?: string;
   is_processed: boolean;

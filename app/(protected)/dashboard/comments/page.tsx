@@ -6,39 +6,32 @@ import {
     ArrowLeft, ChevronDown, ChevronUp, Plus, Edit, Trash, Eye, Filter, Search, X, MessageSquare, User, Link as LinkIcon, ThumbsUp
 } from "lucide-react"; // Adjusted icons for comments
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { deleteCommentAction } from '@/app/actions/commentActions';
+import { Comment } from '@/types/comment';
 // import { DetailDialog } from "@/components/dashboard/shared/DetailDialog"; // Could be used for detailed view
 
 // Interface for Comment data (Adapt based on actual Supabase 'comments' table)
-interface Comment {
-    id: number;
-    created_at: string;
-    post_id?: number; // Link to the related post
-    post_title?: string; // Might be joined or fetched separately
-    author_id?: string; // User ID if logged in
-    author_name: string;
-    author_avatar_url?: string;
-    content: string;
-    status: string; // e.g., 'Approved', 'Pending', 'Spam', 'Replied'
-    platform?: string; // e.g., 'Facebook', 'Instagram', 'Blog'
-    likes?: number;
-    // Helper properties
-    statusColor?: string;
-    platformColor?: string;
-    platformIcon?: React.ElementType;
+interface CommentWithPost extends Comment {
+    posts?: {
+        content: string;
+        platform: string;
+    };
 }
 
 // Adjusted FilterState for Comments
 interface FilterState {
     searchTerm: string;
-    status: string[];
-    platform: string[];
+    platform: string;
     sortBy: string;
     sortDirection: 'asc' | 'desc';
 }
@@ -61,20 +54,18 @@ const platformStyleMapping: { [key: string]: { color: string, icon: React.Elemen
 
 
 export default function CommentsPage() {
-    const [comments, setComments] = useState<Comment[]>([]);
+    const [comments, setComments] = useState<CommentWithPost[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('list'); // Default to list view for comments
     const [filters, setFilters] = useState<FilterState>({
         searchTerm: '',
-        status: [],
-        platform: [],
+        platform: 'all',
         sortBy: 'created_at',
         sortDirection: 'desc',
     });
     const router = useRouter();
-    // const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
-    // const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     // --- Data Fetching ---
     useEffect(() => {
@@ -82,11 +73,20 @@ export default function CommentsPage() {
             setIsLoading(true);
             setError(null);
             try {
-                // TODO: Adjust select query to join post title if needed
-                const { data, error: dbError } = await supabase
-                    .from('comments') // Fetch from 'comments' table
-                    .select('*') // Might need: '*, posts(title)'
+                let query = supabase
+                    .from('comments')
+                    .select('*, posts(content, platform)')
                     .order(filters.sortBy, { ascending: filters.sortDirection === 'asc' });
+
+                if (filters.platform !== 'all') {
+                    query = query.eq('posts.platform', filters.platform);
+                }
+
+                if (filters.searchTerm) {
+                    query = query.ilike('content', `%${filters.searchTerm}%`);
+                }
+
+                const { data, error: dbError } = await query;
 
                 if (dbError) {
                     throw new Error(`Comments fetch error: ${dbError.message}`);
@@ -115,7 +115,37 @@ export default function CommentsPage() {
         };
 
         fetchComments();
-    }, [filters.sortBy, filters.sortDirection]); // Re-fetch when sorting changes
+
+        // Set up real-time subscription for comments
+        const commentsSubscription = supabase
+            .channel('comments')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'comments'
+                },
+                (payload) => {
+                    if (payload.eventType === 'INSERT') {
+                        setComments((prev) => [payload.new as CommentWithPost, ...prev]);
+                    } else if (payload.eventType === 'DELETE') {
+                        setComments((prev) => prev.filter((comment) => comment.id !== payload.old.id));
+                    } else if (payload.eventType === 'UPDATE') {
+                        setComments((prev) =>
+                            prev.map((comment) =>
+                                comment.id === payload.new.id ? (payload.new as CommentWithPost) : comment
+                            )
+                        );
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            commentsSubscription.unsubscribe();
+        };
+    }, [filters]);
 
     // --- Filtering Logic ---
     const filteredComments = useMemo(() => {
@@ -125,12 +155,11 @@ export default function CommentsPage() {
                 comment.content?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
                 comment.post_title?.toLowerCase().includes(filters.searchTerm.toLowerCase()); // Search in post title too if available
 
-            const statusMatch = filters.status.length === 0 || filters.status.includes(comment.status);
-            const platformMatch = filters.platform.length === 0 || filters.platform.includes(comment.platform);
+            const platformMatch = filters.platform === 'all' || filters.platform === comment.platform;
 
-            return searchTermMatch && statusMatch && platformMatch;
+            return searchTermMatch && platformMatch;
         });
-    }, [comments, filters.searchTerm, filters.status, filters.platform]);
+    }, [comments, filters.searchTerm, filters.platform]);
 
     // --- Event Handlers (Similar to Leads/Posts) ---
     const handleFilterChange = (key: keyof FilterState, value: any) => {
@@ -157,8 +186,7 @@ export default function CommentsPage() {
     const clearFilters = () => {
         setFilters({
             searchTerm: '',
-            status: [],
-            platform: [],
+            platform: 'all',
             sortBy: 'created_at',
             sortDirection: 'desc',
         });
@@ -175,7 +203,7 @@ export default function CommentsPage() {
     };
 
     // --- Grid View Card (Adapted for Comments) ---
-    const CommentGridCard = ({ comment }: { comment: Comment }) => (
+    const CommentGridCard = ({ comment }: { comment: CommentWithPost }) => (
         <Card className={`overflow-hidden hover:shadow-lg transition-shadow duration-200 ease-in-out border rounded-lg border-l-4`}
               style={{ borderLeftColor: comment.statusColor }}
         >
@@ -226,7 +254,7 @@ export default function CommentsPage() {
      );
 
      // --- List View Row (Adapted for Comments) ---
-     const CommentListRow = ({ comment }: { comment: Comment }) => (
+     const CommentListRow = ({ comment }: { comment: CommentWithPost }) => (
         <tr className="hover:bg-gray-50 border-b last:border-b-0 text-sm">
              <td className="px-3 py-2">
                  <div className="flex items-center gap-2">
@@ -261,7 +289,95 @@ export default function CommentsPage() {
          </tr>
      );
 
+    // Handle deleting a comment
+    const handleDeleteComment = async (commentId: string) => {
+        if (!confirm('האם אתה בטוח שברצונך למחוק תגובה זו?')) {
+            return;
+        }
+
+        try {
+            setIsDeleting(commentId);
+            
+            const result = await deleteCommentAction(commentId);
+
+            if (!result.success) {
+                toast.error(result.message || 'Failed to delete comment');
+                return;
+            }
+
+            toast.success('התגובה נמחקה בהצלחה');
+        } catch (error) {
+            console.error('Error in handleDeleteComment:', error);
+            toast.error('An error occurred while deleting the comment');
+        } finally {
+            setIsDeleting(null);
+        }
+    };
+
     return (
+        <div className="container mx-auto py-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <MessageSquare className="h-5 w-5" />
+                        <span>תגובות</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {/* Filters */}
+                    <div className="mb-4 flex flex-wrap gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                            <Input
+                                placeholder="חיפוש תגובות..."
+                                value={filters.searchTerm}
+                                onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                                className="w-full"
+                            />
+                        </div>
+                        <Select
+                            value={filters.platform}
+                            onValueChange={(value) => handleFilterChange('platform', value)}
+                        >
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="פלטפורמה" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">כל הפלטפורמות</SelectItem>
+                                {getDistinctValues('platform').map(platform => (
+                                    <SelectItem key={platform} value={platform}>
+                                        {platform}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={filters.sortBy}
+                            onValueChange={(value) => handleSortChange(value)}
+                        >
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="מיין לפי" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="created_at">תאריך יצירה</SelectItem>
+                                <SelectItem value="content">תוכן</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Button
+                            variant="outline"
+                            onClick={() => handleSortChange(filters.sortBy)}
+                        >
+                            {filters.sortDirection === 'asc' ? '↑' : '↓'}
+                        </Button>
+                    </div>
+
+                    {/* Loading and Error States */}
+                    {isLoading && (
+                        <div className="flex justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                        </div>
+                    )}
+                    {error && (
+                        <div className="text-red-600 bg-red-50 border border-red-200 rounded p-4 text-center">
         <div className="p-4 md:p-6 space-y-6" dir="rtl">
             {/* Header */}
             <div className="flex justify-between items-center">
@@ -294,7 +410,7 @@ export default function CommentsPage() {
                           <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                  <Button variant="outline" className="text-sm border-gray-200">
-                                     סטטוס {filters.status.length > 0 ? `(${filters.status.length})` : ''}
+                                     סטטוס {getDistinctValues('status').length > 0 ? `(${getDistinctValues('status').length})` : ''}
                                      <ChevronDown className="mr-2 h-4 w-4" />
                                  </Button>
                              </DropdownMenuTrigger>
@@ -315,7 +431,7 @@ export default function CommentsPage() {
                           <DropdownMenu>
                              <DropdownMenuTrigger asChild>
                                  <Button variant="outline" className="text-sm border-gray-200">
-                                     פלטפורמה {filters.platform.length > 0 ? `(${filters.platform.length})` : ''}
+                                     פלטפורמה {getDistinctValues('platform').length > 0 ? `(${getDistinctValues('platform').length})` : ''}
                                      <ChevronDown className="mr-2 h-4 w-4" />
                                  </Button>
                              </DropdownMenuTrigger>
@@ -352,7 +468,7 @@ export default function CommentsPage() {
                              </Button>
                           </div>
 
-                         {(filters.searchTerm || filters.status.length > 0 || filters.platform.length > 0) && (
+                         {(filters.searchTerm || getDistinctValues('status').length > 0 || getDistinctValues('platform').length > 0) && (
                              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-700 h-8 px-2">
                                  <X className="ml-1 h-4 w-4" />
                                  נקה פילטרים
