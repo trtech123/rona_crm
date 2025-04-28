@@ -3,15 +3,16 @@ import { createClient } from '@supabase/supabase-js'; // Use the standard client
 
 // Initialize Supabase client for server-side operations
 // Ensure these environment variables are set in your deployment
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use service role key for backend operations
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL; // Use the public URL variable
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use the secure, non-public service role key
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Supabase URL or Service Role Key is missing in environment variables.');
+  console.error('Supabase URL (NEXT_PUBLIC_SUPABASE_URL) or Service Role Key (SUPABASE_SERVICE_ROLE_KEY) is missing in environment variables.');
   // Optionally throw an error or handle appropriately
 }
 
 // Create a single Supabase client instance
+// We assert non-null with '!' because we checked above, but handle appropriately if initialization can fail
 const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
 /**
