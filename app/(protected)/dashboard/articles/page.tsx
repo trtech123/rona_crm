@@ -33,6 +33,9 @@ import {
   DialogClose, // To close the dialog
 } from "@/components/ui/dialog";
 
+// Import the PostPublishStatus component
+import { PostPublishStatus } from '@/components/post-publish-status';
+
 // Adjusted FilterState for Posts
 interface FilterState {
     searchTerm: string;
@@ -336,7 +339,14 @@ export default function PostsDashboardPage() { // Renamed component conceptually
                       פלטפורמה: {selectedPostForView?.platform || 'N/A'} | נוצר: {selectedPostForView ? new Date(selectedPostForView.created_at).toLocaleString('he-IL') : ''}
                   </DialogDescription>
                 </DialogHeader>
-                {/* Use created_at from post data */} 
+                
+                {/* Add the PostPublishStatus component */}
+                {selectedPostForView && (
+                  <div className="mb-4">
+                    <PostPublishStatus post={selectedPostForView} />
+                  </div>
+                )}
+                
                 <div className="py-4 whitespace-pre-wrap break-words">
                   {/* Display full content */}
                   {selectedPostForView?.content}

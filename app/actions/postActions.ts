@@ -328,7 +328,7 @@ export async function publishPostAction(postId: string): Promise<{ success: bool
   }
 } 
 
-export async function publishToAyrshareAction(postId: string): Promise<{ success: boolean; message?: string }> {
+export async function publishToMakeAction(postId: string): Promise<{ success: boolean; message?: string }> {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -351,57 +351,55 @@ export async function publishToAyrshareAction(postId: string): Promise<{ success
   }
 
   try {
-    // First, get the post content
-    const { data: post, error: postError } = await supabase
+    // First, get the post data
+    const { data: postData, error: fetchError } = await supabase
       .from('posts')
       .select('*')
-      .match({ id: postId, user_id: user.id })
+      .eq('id', postId)
+      .eq('user_id', user.id)
       .single();
 
-    if (postError || !post) {
-      console.error("Error fetching post:", postError);
-      return { success: false, message: "Post not found" };
+    if (fetchError || !postData) {
+      console.error("Error fetching post:", fetchError);
+      return { success: false, message: "Failed to fetch post data" };
     }
 
-    // Prepare the Ayrshare API request
-    const ayrshareResponse = await fetch("https://api.ayrshare.com/api/post", {
-      method: "POST",
+    // Use the new Make.com webhook URL
+    const makeWebhookUrl = "https://hook.eu2.make.com/yipjme5q3o7z551art6ui47ml1jfp0sw";
+    
+    // Prepare the data to send to Make.com
+    const makePayload = {
+      message: postData.content.replace(/\n\n/g, ' '), // Remove double newlines and replace with space
+      // Include other fields as metadata if needed
+      post_id: postData.id,
+      platform: postData.platform,
+      user_id: user.id,
+      facebook_page_id: process.env.FACEBOOK_PAGE_ID,
+      media_urls: postData.images || [],
+    };
+
+    // Send the data to Make.com
+    const response = await fetch(makeWebhookUrl, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.AYRSHARE_API_KEY}`
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        post: post.content,
-        platforms: ["facebook"], // We're only publishing to Facebook for now
-        mediaUrls: post.images || [] // Include any images if they exist
-      }),
+      body: JSON.stringify(makePayload),
     });
 
-    if (!ayrshareResponse.ok) {
-      const errorData = await ayrshareResponse.json();
-      console.error("Ayrshare API error:", errorData);
-      return { success: false, message: "Failed to publish to social media" };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error sending data to Make.com:", errorText);
+      return { success: false, message: "Failed to send data to Make.com" };
     }
 
-    const ayrshareData = await ayrshareResponse.json();
-    
-    // Extract the Facebook post URL from the Ayrshare response
-    // The URL format might be in the response data, adjust as needed based on Ayrshare's API response
-    const facebookPostUrl = ayrshareData.facebook?.url || ayrshareData.postUrl || null;
-    
-    if (!facebookPostUrl) {
-      console.error("No Facebook post URL found in Ayrshare response:", ayrshareData);
-      return { success: false, message: "Failed to get Facebook post URL" };
-    }
-
-    // Update the post's published status and published_at timestamp
+    // Update the post's published status
     const { error: updateError } = await supabase
       .from('posts')
       .update({ 
         published: true,
         published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        facebook_post_url: facebookPostUrl // Store the Facebook post URL
+        updated_at: new Date().toISOString()
       })
       .match({ id: postId, user_id: user.id });
 
@@ -413,9 +411,9 @@ export async function publishToAyrshareAction(postId: string): Promise<{ success
     // Revalidate the posts page to show updated status
     revalidatePath('/dashboard/articles');
     
-    return { success: true, message: "Post published to Facebook successfully" };
+    return { success: true, message: "Post sent to Make.com for publishing" };
   } catch (error: any) {
-    console.error("Error in publishToAyrshareAction:", error);
+    console.error("Error in publishToMakeAction:", error);
     return { success: false, message: error.message || "An unexpected error occurred" };
   }
 } 

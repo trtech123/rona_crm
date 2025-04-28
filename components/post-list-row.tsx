@@ -4,8 +4,8 @@ import React, { useTransition } from 'react';
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash, Loader2, Send, ExternalLink } from 'lucide-react';
-import { deletePostAction, publishToAyrshareAction } from '@/app/actions/postActions';
+import { Edit, Trash, Loader2, Send, Facebook } from 'lucide-react';
+import { deletePostAction, publishToMakeAction } from '@/app/actions/postActions';
 import type { PostDisplayData } from '@/types/post'; // Import from types file
 import { toast } from 'sonner';
 
@@ -35,21 +35,21 @@ export function PostListRow({ post, onViewPost }: PostListRowProps) {
 
   const handlePublish = async () => {
     if (post.published) {
-      toast.info('This post is already published to Facebook');
+      toast.info('This post is already published');
       return;
     }
 
     setIsPublishing(true);
     try {
-      const result = await publishToAyrshareAction(post.id);
+      const result = await publishToMakeAction(post.id);
       if (result.success) {
-        toast.success('Post published to Facebook successfully');
+        toast.success('Post sent to Make.com for publishing to Facebook');
       } else {
-        toast.error(result.message || 'Failed to publish post to Facebook');
+        toast.error(result.message || 'Failed to publish post');
       }
     } catch (error) {
       console.error('Error publishing post:', error);
-      toast.error('An error occurred while publishing the post to Facebook');
+      toast.error('An error occurred while publishing the post');
     } finally {
       setIsPublishing(false);
     }
@@ -77,32 +77,20 @@ export function PostListRow({ post, onViewPost }: PostListRowProps) {
          <td className="px-3 py-2 text-gray-600">{post.updated_at ? new Date(post.updated_at).toLocaleDateString('he-IL') : '-'}</td>
          <td className="px-3 py-2 text-right">
              <div className="flex justify-end items-center gap-1">
-                  {post.published && post.facebook_post_url ? (
-                    <a 
-                      href={post.facebook_post_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="h-6 w-6 rounded bg-blue-100 flex items-center justify-center hover:bg-blue-200"
-                      title="צפה בפוסט בפייסבוק"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 text-blue-600" />
-                    </a>
-                  ) : (
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 rounded hover:bg-green-100"
-                        title="פרסום בפייסבוק"
-                        onClick={handlePublish}
-                        disabled={isPublishing}
-                    >
-                        {isPublishing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-green-600" />
-                        ) : (
-                          <Send className="h-3.5 w-3.5 text-green-600" />
-                        )}
-                    </Button>
-                  )}
+                  <Button
+                      size="icon"
+                      variant="ghost"
+                      className={`h-6 w-6 rounded ${post.published ? 'bg-green-100' : 'hover:bg-green-100'}`}
+                      title={post.published ? "מפורסם בפייסבוק" : "פרסום בפייסבוק"}
+                      onClick={handlePublish}
+                      disabled={isPublishing || post.published}
+                  >
+                      {isPublishing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-green-600" />
+                      ) : (
+                        <Facebook className={`h-3.5 w-3.5 ${post.published ? 'text-green-600' : 'text-green-600'}`} />
+                      )}
+                  </Button>
                   <Link href={`/posts/${post.id}/edit`} passHref>
                      <Button size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-blue-100" title="עריכה"><Edit className="h-3.5 w-3.5 text-blue-600" /></Button>
                   </Link>
