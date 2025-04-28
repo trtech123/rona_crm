@@ -1,51 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveCommentFromMakeAction } from '@/app/actions/commentActions';
 
 /**
  * API endpoint to receive webhook data from Make.com
  * This endpoint will log the received data to the console
- * and save comments to the database
+ * and can be extended to process the data as needed
  */
 export async function POST(request: NextRequest) {
   try {
     // Parse the JSON data from the request body
     const data = await request.json();
     
-    // Log the complete payload with proper formatting
-    console.log('=== Make.com Webhook Payload ===');
-    console.log(JSON.stringify(data, null, 2));
-    console.log('=== End of Payload ===');
+    // Log the entire payload to the console
+    console.log('Received webhook data from Make.com:', JSON.stringify(data, null, 2));
     
-    // Log request headers for debugging
-    console.log('=== Request Headers ===');
-    const headers: Record<string, string> = {};
-    request.headers.forEach((value, key) => {
-      headers[key] = value;
-    });
-    console.log(JSON.stringify(headers, null, 2));
-    console.log('=== End of Headers ===');
-    
-    // Extract and log specific fields with more detail
+    // Extract and log specific fields
     if (data.comments) {
-      console.log('=== Comments Data ===');
-      console.log(JSON.stringify(data.comments, null, 2));
-      console.log('=== End of Comments ===');
-      
-      // If we have a post_id and comments, save them to the database
-      if (data.post_id && typeof data.comments === 'string') {
-        const result = await saveCommentFromMakeAction(
-          data.post_id,
-          data.comments,
-          'make',
-          { original_data: data }
-        );
-        
-        if (!result.success) {
-          console.error('Failed to save comment from Make.com:', result.message);
-        } else {
-          console.log('Comment saved successfully:', result.comment?.id);
-        }
-      }
+      console.log('Comments from Make.com:', data.comments);
     }
     
     if (data.post_id) {
@@ -59,18 +29,11 @@ export async function POST(request: NextRequest) {
     // Return a success response
     return NextResponse.json({ 
       success: true, 
-      message: 'Webhook data received successfully',
-      received_data: data // Include the received data in the response for debugging
+      message: 'Webhook data received successfully' 
     });
   } catch (error) {
-    // Log any errors that occur with full details
-    console.error('=== Error Processing Webhook ===');
-    console.error('Error details:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    console.error('=== End of Error ===');
+    // Log any errors that occur
+    console.error('Error processing webhook data:', error);
     
     // Return an error response
     return NextResponse.json(
