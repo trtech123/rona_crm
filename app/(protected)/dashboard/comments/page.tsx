@@ -86,9 +86,17 @@ export default function CommentsPage() {
         const fetchComments = async () => {
             setIsLoading(true);
             setError(null);
-            // Log the filters being used for this fetch
             console.log(`[${new Date().toISOString()}] Fetching comments with filters:`, JSON.stringify(filters));
             try {
+                // *** ADD LOG FOR AUTH STATUS ***
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                if (sessionError) {
+                    console.error(`[${new Date().toISOString()}] Error getting session:`, sessionError);
+                } else {
+                    console.log(`[${new Date().toISOString()}] Supabase session status:`, session ? `Authenticated (User ID: ${session.user.id})` : 'Not Authenticated');
+                }
+                // ********************************
+
                 // Fetch necessary columns directly
                 // If post title needed, perform join: .select('*, posts(title)')
                 const { data, error: dbError } = await supabase
