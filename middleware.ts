@@ -62,7 +62,8 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session if expired - **important!**
   // This keeps the session alive and cookie updated
-  await supabase.auth.getSession()
+  const { data: { session } } = await supabase.auth.getSession();
+  console.log(`[Middleware] Session status after getSession(): ${session ? `Authenticated (User ID: ${session.user.id})` : 'Not Authenticated'}`);
 
   // Return the potentially modified response
   return response
