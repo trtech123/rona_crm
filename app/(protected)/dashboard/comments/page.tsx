@@ -108,6 +108,26 @@ export default function CommentsPage() {
         JSON.stringify(filters)
       );
       try {
+        // *** Add session check log right before the query ***
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.error(
+            `[${new Date().toISOString()}] Error getting session just before fetch:`,
+            sessionError
+          );
+        } else {
+          console.log(
+            `[${new Date().toISOString()}] Supabase session status just before fetch:`,
+            session
+              ? `Authenticated (User ID: ${session.user.id})`
+              : "Not Authenticated"
+          );
+        }
+        // ************************************************
+
         // Fetch necessary columns directly
         // If post title needed, perform join: .select('*, posts(title)')
         const { data, error: dbError } = await supabase
