@@ -107,11 +107,11 @@ export async function POST(request: NextRequest) {
 
     // --- Prepare Comments for Insertion ---    
     const commentsToInsert = comments.map(comment => ({
-      post_id: internalPostId,       // Link to our internal post UUID
-      comment_text: comment.message,   // Get text from 'message' field
-      lead_name: comment.from.name,  // Get name from nested 'from.name'
-      platform_lead_id: comment.from.id // Store the platform-specific lead ID
-      // Add other fields here if available in payload
+      post_id: internalPostId,       // Link to our internal post UUID (matches schema if posts.id is UUID)
+      content: comment.message,      // Corrected: Map to 'content' column
+      lead_name: comment.from.name,  // Get name from nested 'from.name' (matches schema)
+      external_id: comment.from.id   // Corrected: Map platform user ID to 'external_id' column
+      // Add other fields here if needed, like 'source' or defaults for other columns
     }));
 
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`);
