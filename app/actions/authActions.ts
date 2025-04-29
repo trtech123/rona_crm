@@ -61,6 +61,8 @@ export async function signInAction(formData: FormData): Promise<{ error: string 
     }
 
     console.log('[signInAction] Sign in successful for:', email);
+    const currentCookies = cookieStore.getAll();
+    console.log('[signInAction] Cookies after successful sign-in:', JSON.stringify(currentCookies));
     // Sign-in successful, cookie should be set in the response headers by ssr
     return { error: null };
 

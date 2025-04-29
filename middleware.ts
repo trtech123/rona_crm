@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   console.log(`[Middleware] Running for path: ${request.nextUrl.pathname}`);
+  const incomingCookies = request.cookies.getAll();
+  console.log('[Middleware] Incoming request cookies:', JSON.stringify(incomingCookies));
   // Create an unmodified response
   let response = NextResponse.next({
     request: {
