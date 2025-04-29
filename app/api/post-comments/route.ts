@@ -149,9 +149,10 @@ export async function POST(request: NextRequest) {
     const commentsToUpsert = comments.map(comment => ({
       // Make sure all required fields are present, including the unique one
       post_id: internalPostId,
-      content: comment.message,      // Map message text to 'content'
-      lead_name: comment.from.name,  // Map user name to 'lead_name'
-      external_id: comment.id // This is the column with the UNIQUE constraint
+      content: comment.message,      
+      lead_name: comment.from.name,  
+      external_id: comment.id, 
+      source: 'facebook' // Add default source value
       // Add other columns with default values if necessary for insertion
     }));
 
