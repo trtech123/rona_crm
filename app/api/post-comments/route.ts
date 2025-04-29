@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { URLSearchParams } from 'url'; // Import URLSearchParams
+// No longer need URLSearchParams
+// import { URLSearchParams } from 'url'; 
 
 // Initialize Supabase client using Service Role Key
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -53,49 +54,48 @@ export async function POST(request: NextRequest) {
 
   let payload: CommentWebhookPayload | null = null;
   let rawBody = '';
+  let cleanedBody = ''; // Variable for the cleaned body
 
   try {
     rawBody = await request.text(); // Read body as raw text first
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Received Raw Body:`, rawBody);
 
-    // --- Attempt to Parse Body ---
+    // --- Attempt to Clean and Parse Body ---
     try {
-      // First, try parsing directly as JSON (in case it's mostly valid)
-      payload = JSON.parse(rawBody) as CommentWebhookPayload;
-      console.log(`[${new Date().toISOString()}] Public Post Comments API: Successfully parsed raw body as JSON.`);
-    } catch (jsonError) {
-      console.warn(`[${new Date().toISOString()}] Public Post Comments API: Failed to parse body directly as JSON. Error: ${jsonError instanceof Error ? jsonError.message : jsonError}. Attempting form data parsing.`);
-      
-      try {
-        // If direct JSON fails, try parsing as form data
-        const formData = new URLSearchParams(rawBody);
-        
-        // *** ASSUMPTION: The actual JSON payload is in a field named 'payload' ***
-        // *** You might need to change 'payload' based on the rawBody log output ***
-        const jsonString = formData.get('payload'); 
+      cleanedBody = rawBody.trim(); // Remove leading/trailing whitespace
 
-        if (jsonString) {
-          console.log(`[${new Date().toISOString()}] Public Post Comments API: Found form field 'payload'. Attempting to parse its value as JSON.`);
-          payload = JSON.parse(jsonString) as CommentWebhookPayload;
-        } else {
-          // Log all form data keys if 'payload' is not found, to help identify the correct key
-          const keys = Array.from(formData.keys());
-          console.error(`[${new Date().toISOString()}] Public Post Comments API: Failed to find expected 'payload' field in form data. Found keys: ${keys.join(', ')}`);
-          throw new Error("Could not find expected payload field in form data.");
-        }
-      } catch (formDataError) {
-         console.error(`[${new Date().toISOString()}] Public Post Comments API: Failed to parse body as JSON or Form Data.`);
-         // Throw the specific error that occurred during parsing
-         throw formDataError instanceof Error ? formDataError : new Error('Failed to parse request body.');
+      // Fix 1: Remove leading comma if present
+      if (cleanedBody.startsWith('{,')) {
+        console.warn(`[${new Date().toISOString()}] Public Post Comments API: Found leading comma. Attempting to fix.`);
+        cleanedBody = '{' + cleanedBody.substring(2); // Remove the comma
       }
-    }
+      
+      // Fix 2: Replace incorrect comma after "comment_id" with a colon
+      // Be careful: this assumes "comment_id" is always followed by a comma and a space before its value
+      const incorrectCommentIdSeparator = '"comment_id", ';
+      const correctCommentIdSeparator = '"comment_id": ';
+      if (cleanedBody.includes(incorrectCommentIdSeparator)) {
+           console.warn(`[${new Date().toISOString()}] Public Post Comments API: Found incorrect separator for comment_id. Attempting to fix.`);
+           cleanedBody = cleanedBody.replace(incorrectCommentIdSeparator, correctCommentIdSeparator);
+      } else {
+           console.warn(`[${new Date().toISOString()}] Public Post Comments API: Did not find expected incorrect separator "${incorrectCommentIdSeparator}". Check raw body if parsing fails.`);
+      }
 
+
+      console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to parse Cleaned Body:`, cleanedBody);
+      payload = JSON.parse(cleanedBody) as CommentWebhookPayload;
+      console.log(`[${new Date().toISOString()}] Public Post Comments API: Successfully parsed cleaned body as JSON.`);
+
+    } catch (parseError) {
+      console.error(`[${new Date().toISOString()}] Public Post Comments API: Failed to parse cleaned body as JSON. Error: ${parseError instanceof Error ? parseError.message : parseError}`);
+      // No fallback to form data needed now
+      throw parseError instanceof Error ? parseError : new Error('Failed to parse cleaned request body.');
+    }
+    
     // --- Check if payload was successfully parsed ---
-    if (!payload) {
-        throw new Error("Failed to extract payload from request body.");
+    if (!payload) { // Should not happen if parse succeeded, but good safety check
+        throw new Error("Payload is null after parsing attempt.");
     }
-
-    console.log(`[${new Date().toISOString()}] Public Post Comments API: Successfully Extracted Payload:`, JSON.stringify(payload, null, 2));
 
     // --- Payload Validation (use the extracted payload) ---
     const { platform_post_id, comments } = payload;
@@ -172,7 +172,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const errorDuration = Date.now() - startTime;
     console.error(`[${new Date().toISOString()}] --- Public Post Comments API: ERROR after ${errorDuration}ms ---`);
-    console.error('Raw Body that caused error:', rawBody); // Log raw body on error
+    console.error('Original Raw Body that caused error:', rawBody); // Log original raw body
+    console.error('Cleaned Body before error (if applicable):', cleanedBody); // Log cleaned body
     console.error('Caught Error Object:', error);
     if (error instanceof Error) {
       console.error('Error Name:', error.name);
