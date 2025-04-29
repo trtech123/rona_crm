@@ -735,7 +735,7 @@ export default function CommentsPage() {
         )}
       </div>
 
-      {/* View Post Dialog - Adapted from articles page */}
+      {/* View Post Dialog - Use structure from articles page */}
       <Dialog open={isPostModalOpen} onOpenChange={setIsPostModalOpen}>
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -764,14 +764,51 @@ export default function CommentsPage() {
           )}
 
           {/* Display Post Content if loaded */}
-          {!isPostLoading && !error && viewedPostDetails && (
+          {!isPostLoading && !postError && viewedPostDetails && (
             <>
-              {/* Optional: Add PostPublishStatus if relevant and 'viewedPostDetails' has needed fields */}
-              {/* <div className="mb-4">
-                <PostPublishStatus post={viewedPostDetails} />
-              </div> */}
+              {/* Add the PostPublishStatus component (ensure viewedPostDetails has needed fields) */}
+              <div className="mb-4">
+                {/* Use viewedPostDetails here */}
+                <PostPublishStatus post={viewedPostDetails as any} />
+              </div>
 
-              {/* Display post title */}
+              {/* Generate Facebook Link if applicable */}
+              {(() => {
+                const platform = (viewedPostDetails as any)?.platform;
+                const postIdString = (viewedPostDetails as any)?.post_id;
+                if (
+                  platform === "facebook" &&
+                  typeof postIdString === "string" &&
+                  postIdString.includes("_")
+                ) {
+                  const parts = postIdString.split("_");
+                  if (parts.length === 2) {
+                    const [page_id, post_id_suffix] = parts;
+                    const facebookUrl = `https://www.facebook.com/${page_id}/posts/${post_id_suffix}`;
+                    return (
+                      <div className="mb-3">
+                        <Button
+                          variant="link"
+                          asChild
+                          className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                        >
+                          <a
+                            href={facebookUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <LinkIcon className="ml-1.5 h-3.5 w-3.5" />
+                            צפה בפוסט המקורי בפייסבוק
+                          </a>
+                        </Button>
+                      </div>
+                    );
+                  }
+                }
+                return null; // Return null if not a valid Facebook post ID
+              })()}
+
+              {/* Display post title (optional - not in screenshot but might be useful) */}
               {viewedPostDetails.title && (
                 <h3 className="font-semibold mb-2 text-lg">
                   {viewedPostDetails.title}
