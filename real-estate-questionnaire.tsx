@@ -17,7 +17,7 @@ import { Mic, Check, ChevronDown, ChevronLeft, ChevronRight, Info } from "lucide
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { motion, AnimatePresence } from "framer-motion" // Import motion and AnimatePresence
-import { supabase } from "@/lib/supabaseClient"; // <-- Import supabase client
+import { type SupabaseClient } from '@supabase/supabase-js'; // Import SupabaseClient type
 
 // Define the *minimal* necessary schema based on remaining questions
 const formSchema = z.object({
@@ -358,7 +358,13 @@ if (fileUploadGroup.length > 0) {
 }
 
 // Main Component
-export default function RealEstateQuestionnaire({ defaultValues }: { defaultValues?: any }) {
+export default function RealEstateQuestionnaire({
+   defaultValues,
+   supabase // <-- ADD supabase prop
+  }: {
+     defaultValues?: any;
+     supabase: SupabaseClient; // <-- ADD supabase prop type
+   }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [showOtherInput, setShowOtherInput] = useState<Record<string, boolean>>({})
   const [submitted, setSubmitted] = useState(false);
@@ -521,13 +527,17 @@ export default function RealEstateQuestionnaire({ defaultValues }: { defaultValu
     let profilePictureUrl: string | null = null;
 
     try {
-      // 1. Get current user
+      // 1. Get current user (using the PASSED IN supabase client)
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
+        // Added specific check for AuthSessionMissingError to provide clearer feedback
+        if (userError?.message.includes('Auth session missing')) {
+           throw new Error("Auth session missing during submit. Please try refreshing the page or logging in again.");
+        }
         throw new Error(userError?.message || "לא ניתן לאמת משתמש. נסה להתחבר מחדש.");
       }
 
-      // --- File Upload Logic ---
+      // --- File Upload Logic (using the PASSED IN supabase client) ---
       const uploadFile = async (file: File | null | undefined, fileNamePrefix: string): Promise<string | null> => {
         if (!file || !(file instanceof File)) return null; // Added check if it's actually a File
 
@@ -548,7 +558,7 @@ export default function RealEstateQuestionnaire({ defaultValues }: { defaultValu
           throw new Error(`שגיאה בהעלאת ${fileNamePrefix === 'logo' ? 'לוגו' : 'תמונת פרופיל'}. (${uploadError.message})`); // Include Supabase error
         }
 
-        // Get public URL
+        // Get public URL (using the PASSED IN supabase client)
         const { data: urlData } = supabase.storage
             .from('profile_media')
             .getPublicUrl(filePath);
@@ -561,7 +571,7 @@ export default function RealEstateQuestionnaire({ defaultValues }: { defaultValu
       profilePictureUrl = await uploadFile(profilePicFile, 'profile_picture');
       // --- End File Upload Logic ---
 
-      // 2. Save questionnaire response (using the clean dataForJson)
+      // 2. Save questionnaire response (using the PASSED IN supabase client)
       const { error: responseError } = await supabase
         .from('questionnaire_responses')
         .upsert({ user_id: user.id, response: dataForJson }, { onConflict: 'user_id' });
@@ -571,7 +581,7 @@ export default function RealEstateQuestionnaire({ defaultValues }: { defaultValu
         throw new Error("שגיאה בשמירת תשובות השאלון.");
       }
 
-      // 3. Update profile flag and URLs
+      // 3. Update profile flag and URLs (using the PASSED IN supabase client)
       const profileUpdateData: { questionnaire_completed: boolean; logo_url?: string; profile_picture_url?: string } = {
         questionnaire_completed: true,
       };

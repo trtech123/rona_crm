@@ -110,7 +110,22 @@ export default function PostsDashboardPage() {
         // Fetch from 'posts' table
         const { data, error: dbError } = await supabase
           .from("posts")
-          .select("*") // Select all columns from posts
+          .select(`
+            id,
+            user_id,
+            content,
+            platform,
+            created_at, 
+            updated_at,
+            published,
+            published_at,
+            scheduled_at,
+            hashtags,
+            suggested_image_prompt,
+            suggested_cta,
+            post_id,
+            original_post_url
+          `)
           .order(filters.sortBy, {
             ascending: filters.sortDirection === "asc",
           });
@@ -121,18 +136,19 @@ export default function PostsDashboardPage() {
         }
 
         // Add computed styles/icons based on platform
-        const processedData =
-          data?.map((post): PostDisplayData => {
+        const processedData = (
+          data?.map((post) => { // Removed : PostDisplayData return type annotation for now
             const platformKey = post.platform?.toLowerCase() || "other";
             const platformStyle =
               platformStyleMapping[platformKey] ||
               platformStyleMapping["other"];
             return {
-              ...(post as PostDisplayData), // Cast fetched data
+              ...post, // Remove the cast: (post as PostDisplayData)
               platformColor: platformStyle.color,
               icon: platformStyle.icon,
             };
-          }) || [];
+          }) || []
+        ) as PostDisplayData[]; // Add cast to the final array instead
 
         setPosts(processedData);
       } catch (err: any) {

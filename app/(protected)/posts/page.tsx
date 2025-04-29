@@ -34,7 +34,19 @@ async function getUserPosts(supabase: any): Promise<Post[]> {
   console.log(`[PostsPage] Attempting to fetch posts for user ${user.id}...`);
   const { data: posts, error: postsError } = await supabase
     .from('posts')
-    .select('*')
+    // Explicitly select columns, including original_url
+    .select(`
+      id,
+      content,
+      platform,
+      hashtags,
+      created_at,
+      original_url, 
+      published, 
+      published_at,
+      scheduled_at
+      // Add other required fields from PostDisplayData type if needed
+    `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 

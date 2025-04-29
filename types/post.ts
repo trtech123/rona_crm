@@ -118,21 +118,23 @@ export const PostSchema = z.object({
 export type Post = z.infer<typeof PostSchema>
 
 // Interface for displaying posts in the dashboard
-// Combines DB fields with UI helper fields
-export interface PostDisplayData extends Post {
-  id: string; // uuid from posts table (already in Post type)
-  user_id?: string; // uuid from posts table (add if needed, not in base Post type)
-  content: string; // text (already in Post type)
+// Represents the actual data structure fetched plus UI helpers
+export interface PostDisplayData {
+  id: string; // uuid from posts table
+  user_id?: string; // uuid from posts table
+  content: string; // text 
   platform?: string; // text
-  created_at: string; // timestamptz (use createdAt from base Post type)
-  updated_at?: string; // timestamptz (use updatedAt from base Post type)
+  created_at: string; // timestamptz 
+  updated_at?: string; // timestamptz 
   scheduled_at?: string; // timestamptz
   published?: boolean;
   published_at?: string;
   hashtags?: string[]; // array
   suggested_image_prompt?: string; // text
   suggested_cta?: string; // text
-  // Helper properties
+  post_id?: string; // text - External post ID?
+  original_post_url?: string; // text - Full URL constructed from post_id
+  // Helper properties added in the frontend
   platformColor?: string;
   icon?: React.ElementType;
 } 

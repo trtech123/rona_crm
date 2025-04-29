@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash, Loader2 } from 'lucide-react';
+import { Edit, Trash, Loader2, Link as LinkIcon } from 'lucide-react';
 import { deletePostAction } from '@/app/actions/postActions';
 import type { PostDisplayData } from '@/types/post';
 
@@ -55,6 +55,13 @@ export function PostGridCard({ post }: PostGridCardProps) {
              </div>
 
              <div className="flex justify-end gap-1 pt-2">
+                 {post.original_url && (
+                     <Button asChild size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-gray-100" title="צפה בפוסט המקורי">
+                         <a href={post.original_url} target="_blank" rel="noopener noreferrer">
+                             <LinkIcon className="h-4 w-4 text-gray-600" />
+                         </a>
+                     </Button>
+                 )}
                  <Link href={`/posts/${post.id}/edit`} passHref>
                      <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-blue-100" title="עריכה">
                          <Edit className="h-4 w-4 text-blue-600" />

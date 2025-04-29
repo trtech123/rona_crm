@@ -1,88 +1,83 @@
-import { createServerClient } from '@supabase/ssr'; // Correct import for SSR/Server Components
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import React from 'react';
-import { Session } from '@supabase/supabase-js'; // Import Session type
-// Import the DashboardLayout component
-import DashboardLayout from '@/components/dashboard/layout/DashboardLayout'; 
-// Assuming you have a Navbar component for protected routes
-// import DashboardNavbar from '@/components/dashboard/DashboardNavbar'; 
+'use client'; // Convert to Client Component
 
-export default async function ProtectedLayout({
+import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation'; // Import client hooks
+import { createBrowserClient } from '@supabase/ssr'; // Use browser client
+import DashboardLayout from '@/components/dashboard/layout/DashboardLayout';
+
+export default function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  console.log('[Protected Layout] Running...');
-  const cookieStore = await cookies(); // Await cookies()
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Log all cookies received by the layout
-  console.log('[Protected Layout] Cookies received:');
-  const allCookies = cookieStore.getAll();
-  if (allCookies.length === 0) {
-    console.log('  (No cookies found)');
-  } else {
-    allCookies.forEach(cookie => {
-      console.log(`  - ${cookie.name}=${cookie.value.substring(0, 15)}...`);
+  // Create Supabase client only once
+  const [supabase] = useState(() =>
+    createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  );
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      console.log('[Protected Layout - Client] Checking auth...');
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        console.log('[Protected Layout - Client] No session, redirecting to /signin');
+        router.replace('/signin'); // Use replace to avoid pushing to history
+      } else {
+        console.log(`[Protected Layout - Client] Session found for user ${session.user.id}`);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    // Optional: Listen for auth changes (login/logout in other tabs)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+       console.log(`[Protected Layout - Client] Auth state changed: ${event}`);
+      if (event === 'SIGNED_OUT') {
+        router.replace('/signin');
+      } else if (event === 'SIGNED_IN') {
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        // Potentially refresh data or redirect based on new session
+      }
     });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [supabase, router]);
+
+  if (isLoading) {
+    // You can replace this with a proper loading spinner/component
+    return <div>Loading authentication...</div>;
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        // Now use the resolved cookieStore
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        // Server Components don't typically set cookies,
-        // but provide handlers if needed for session refresh side-effects
-        set(name: string, value: string, options: any) {
-          // This might be called by getSession if refresh happens
-          // Need to decide if/how to handle cookie setting here
-          // For now, log it
-          console.warn(`[Protected Layout] Attempted to set cookie: ${name}`);
-        },
-        remove(name: string, options: any) {
-          console.warn(`[Protected Layout] Attempted to remove cookie: ${name}`);
-        },
-      },
+  // If authenticated, render based on path
+  if (isAuthenticated) {
+    // Check if the current path is the root of the protected section
+    // NOTE: usePathname() within the (protected) group will return paths relative to that group,
+    // so the root page corresponds to pathname '/'
+    console.log(`[Protected Layout - Client] Current pathname: ${pathname}`);
+    if (pathname === '/') {
+      console.log('[Protected Layout - Client] Rendering children directly (root path)');
+      return <>{children}</>; // Render only children for the root page
+    } else {
+      console.log('[Protected Layout - Client] Wrapping children with DashboardLayout');
+      // Render children wrapped in DashboardLayout for all other protected pages
+      return <DashboardLayout>{children}</DashboardLayout>;
     }
-  );
-
-  let session: Session | null = null;
-  let sessionError: any = null;
-
-  try {
-    console.log('[Protected Layout] Calling getSession()...');
-    const { data, error } = await supabase.auth.getSession();
-    session = data.session;
-    sessionError = error;
-    console.log('[Protected Layout] getSession() completed.');
-    if (sessionError) {
-      console.error('[Protected Layout] Error getting session:', sessionError);
-    }
-  } catch (e) {
-    console.error('[Protected Layout] Exception during getSession():', e);
-    sessionError = e;
   }
 
-  if (!session) {
-    // Construct the redirect URL. Pass the intended destination as a query parameter.
-    const currentPath = ''; // TODO: Figure out how to get current path in server layout if needed for redirect
-    // For simplicity, just redirect to signin for now. Middleware handled redirectTo better.
-    console.log('[Protected Layout] No session found (or error occurred), redirecting to /signin');
-    redirect('/signin'); 
-  }
-
-  // If session exists, render the children (the protected page)
-  console.log(`[Protected Layout] Session found for user ${session.user.id}, rendering protected route.`);
-  
-  // Wrap children with the DashboardLayout component instead of the basic structure
-  return (
-    <DashboardLayout>
-      {children} 
-    </DashboardLayout>
-  );
+  // Fallback if not loading and not authenticated (should be handled by redirect, but good practice)
+  return null;
 } 

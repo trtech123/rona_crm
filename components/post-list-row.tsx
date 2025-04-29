@@ -4,7 +4,7 @@ import React, { useTransition } from 'react';
 import Link from 'next/link';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash, Loader2, Send, Facebook } from 'lucide-react';
+import { Edit, Trash, Loader2, Send, Facebook, Link as LinkIcon } from 'lucide-react';
 import { deletePostAction, publishToMakeAction } from '@/app/actions/postActions';
 import type { PostDisplayData } from '@/types/post'; // Import from types file
 import { toast } from 'sonner';
@@ -55,6 +55,8 @@ export function PostListRow({ post, onViewPost }: PostListRowProps) {
     }
   };
 
+  console.log("Post Data:", post);
+
   return (
     <tr className="hover:bg-gray-50 border-b last:border-b-0 text-sm">
         {/* Make content cell clickable */}
@@ -77,20 +79,31 @@ export function PostListRow({ post, onViewPost }: PostListRowProps) {
          <td className="px-3 py-2 text-gray-600">{post.updated_at ? new Date(post.updated_at).toLocaleDateString('he-IL') : '-'}</td>
          <td className="px-3 py-2 text-right">
              <div className="flex justify-end items-center gap-1">
-                  <Button
-                      size="icon"
-                      variant="ghost"
-                      className={`h-6 w-6 rounded ${post.published ? 'bg-green-100' : 'hover:bg-green-100'}`}
-                      title={post.published ? "מפורסם בפייסבוק" : "פרסום בפייסבוק"}
-                      onClick={handlePublish}
-                      disabled={isPublishing || post.published}
-                  >
-                      {isPublishing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-green-600" />
-                      ) : (
-                        <Facebook className={`h-3.5 w-3.5 ${post.published ? 'text-green-600' : 'text-green-600'}`} />
-                      )}
-                  </Button>
+                  {/* Conditionally render Facebook publish button (assuming existing logic is for FB) */}
+                  {post.platform?.toLowerCase() === 'facebook' && (
+                    <Button
+                        size="icon"
+                        variant="ghost"
+                        className={`h-6 w-6 rounded ${post.published ? 'bg-green-100' : 'hover:bg-green-100'}`}
+                        title={post.published ? "מפורסם בפייסבוק" : "פרסום בפייסבוק"}
+                        onClick={handlePublish}
+                        disabled={isPublishing || post.published}
+                    >
+                        {isPublishing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-green-600" />
+                        ) : (
+                          <Facebook className={`h-3.5 w-3.5 ${post.published ? 'text-green-600' : 'text-green-600'}`} />
+                        )}
+                    </Button>
+                  )}
+                  {/* View Original Post Link */}
+                  {post.original_post_url && (
+                     <Button asChild size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-gray-100" title="צפה בפוסט המקורי">
+                         <a href={post.original_post_url} target="_blank" rel="noopener noreferrer">
+                             <LinkIcon className="h-3.5 w-3.5 text-gray-600" />
+                         </a>
+                     </Button>
+                  )}
                   <Link href={`/posts/${post.id}/edit`} passHref>
                      <Button size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-blue-100" title="עריכה"><Edit className="h-3.5 w-3.5 text-blue-600" /></Button>
                   </Link>
