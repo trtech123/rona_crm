@@ -14,10 +14,16 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Create client only if config is present
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
+// Define the structure for a single comment coming in the payload
+interface InputComment {
+  text: string;
+  // Name of the lead/user who made the comment
+  lead_name: string; 
+}
+
 interface CommentWebhookPayload {
   platform_post_id: string;
-  comments: string[]; // Assuming an array of comment texts for simplicity
-  // Alternatively, could be an array of objects: { text: string; author?: string; platform_id?: string; ... }
+  comments: InputComment[]; // Now an array of comment objects
 }
 
 /**
@@ -48,10 +54,18 @@ export async function POST(request: NextRequest) {
     const { platform_post_id, comments } = payload;
 
     // Validate payload
-    if (!platform_post_id || !comments || !Array.isArray(comments) || comments.length === 0) {
+    if (
+      !platform_post_id || 
+      !comments || 
+      !Array.isArray(comments) || 
+      comments.length === 0 ||
+      // Check if every comment object has the required fields
+      !comments.every(c => c && typeof c.text === 'string' && typeof c.lead_name === 'string') 
+    ) {
       console.warn(`[${new Date().toISOString()}] Public Post Comments API: Invalid payload received. platform_post_id: ${platform_post_id}, comments type: ${typeof comments}, isArray: ${Array.isArray(comments)}, length: ${comments?.length}`);
+      // Add more specific validation logging if needed
       return NextResponse.json(
-        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array.' }, 
+        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array, where each comment has text and lead_name (string).' }, 
         { status: 400 }
       );
     }
@@ -80,19 +94,18 @@ export async function POST(request: NextRequest) {
     const internalPostId = postData.id;
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Found internal post ID: ${internalPostId} for platform_post_id: ${platform_post_id}`);
 
-    // --- Insert Comments ---    
-    // Prepare comments for insertion (adapt if comments are objects with more fields)
-    const commentsToInsert = comments.map(commentText => ({
-      post_id: internalPostId, // Link to our internal post UUID
-      comment_text: commentText,
+    // --- Prepare Comments for Insertion ---    
+    const commentsToInsert = comments.map(comment => ({
+      post_id: internalPostId,       // Link to our internal post UUID
+      comment_text: comment.text,
+      lead_name: comment.lead_name  // Store the lead's name directly
       // Add other fields here if available in payload, e.g.:
       // platform_comment_id: comment.platform_id,
-      // author_name: comment.author,
     }));
 
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`);
-    const { error: insertError } = await supabase
-      .from('post_comments') // Target the comments table
+    const { data: insertedComments, error: insertError } = await supabase
+      .from('comments') // Corrected: Target the comments table
       .insert(commentsToInsert);
 
     if (insertError) {
