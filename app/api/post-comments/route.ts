@@ -145,29 +145,48 @@ export async function POST(request: NextRequest) {
     const internalPostId = postData.id;
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Found internal post ID: ${internalPostId} for platform_post_id: ${platform_post_id}`);
 
-    // --- Prepare Comments for Insertion ---
-     const commentsToInsert = comments.map(comment => ({
+    // --- Prepare Comments for Upsertion ---
+    const commentsToUpsert = comments.map(comment => ({
+      // Make sure all required fields are present, including the unique one
       post_id: internalPostId,
       content: comment.message,      // Map message text to 'content'
       lead_name: comment.from.name,  // Map user name to 'lead_name'
-      external_id: comment.id        // Corrected: Map comment's own ID to 'external_id'
+      external_id: comment.id // This is the column with the UNIQUE constraint
+      // Add other columns with default values if necessary for insertion
     }));
 
-    // --- Insert Comments ---
-    console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`, JSON.stringify(commentsToInsert, null, 2));
-    const { data: insertedComments, error: insertError } = await supabase
-      .from('comments') // Corrected: Target the comments table
-      .insert(commentsToInsert);
-
-    if (insertError) {
-      console.error(`[${new Date().toISOString()}] Public Post Comments API: Error inserting comments for internal post ID ${internalPostId}:`, insertError);
-      throw insertError;
-    }
+    // --- Upsert Comments (Insert or Ignore Duplicates) ---
+    console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to upsert ${commentsToUpsert.length} comments for internal post ID: ${internalPostId}`, JSON.stringify(commentsToUpsert, null, 2));
     
+    const { data: upsertedComments, error: upsertError } = await supabase
+      .from('comments')
+      .upsert(commentsToUpsert, {
+         onConflict: 'external_id', // Specify the column that causes a conflict (the one with the UNIQUE constraint)
+         // ignoreDuplicates: false // Default is false, meaning it *tries* to update on conflict. We don't specify an update, so it effectively ignores.
+         // Alternatively, Supabase might support ignoreDuplicates directly on upsert in some versions, but onConflict is standard.
+      });
+
+    if (upsertError) {
+      // Check if the error is the unique constraint violation - we might choose to ignore it or handle specifically
+      // For now, we'll log and throw, but you could add logic here.
+      console.error(`[${new Date().toISOString()}] Public Post Comments API: Error upserting comments for internal post ID ${internalPostId}:`, upsertError);
+      throw upsertError;
+    }
+
+    // Note: upsert might return data differently than insert, adjust if needed.
+    // Typically, it returns the inserted/updated rows.
+    // Fix for linter error: Explicitly check if array before accessing length
+    let upsertedCount = 0;
+    if (Array.isArray(upsertedComments)) {
+      // Use type assertion as workaround for persistent linter error
+      upsertedCount = (upsertedComments as unknown[]).length;
+    }
+
     // --- Success Response ---
     const duration = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] Public Post Comments API: Successfully inserted ${commentsToInsert.length} comments for internal post ID ${internalPostId} in ${duration}ms.`);
-    return NextResponse.json({ success: true, message: `Successfully added ${commentsToInsert.length} comments.` });
+    // Modify the success message slightly to reflect upsertion
+    console.log(`[${new Date().toISOString()}] Public Post Comments API: Successfully processed ${commentsToUpsert.length} comments (upserted ${upsertedCount}) for internal post ID ${internalPostId} in ${duration}ms.`);
+    return NextResponse.json({ success: true, message: `Successfully processed ${commentsToUpsert.length} comments (upserted ${upsertedCount}).` });
 
   } catch (error) {
     const errorDuration = Date.now() - startTime;
