@@ -54,7 +54,7 @@ function SigninContent() {
       const targetPath = redirectTo || '/dashboard'; 
       console.log(`[Signin Page] Pushing to ${targetPath}...`);
       router.push(targetPath);
-      // router.refresh(); // Optional: uncomment if you want to force a refresh after push
+      router.refresh(); // Force a refresh to ensure client picks up new cookie state
 
       // Keep loading until navigation (potentially) completes
       // setLoading(false); 
