@@ -116,6 +116,9 @@ export default function CommentsPage() {
                     } as Comment; // Assert type after adding computed props
                 }) || [];
 
+                // *** ADD LOG HERE ***
+                console.log("Processed data before setting state:", processedData);
+
                 setComments(processedData);
             } catch (err: any) {
                 console.error("Error fetching comments:", err);
@@ -141,6 +144,9 @@ export default function CommentsPage() {
             return searchTermMatch && statusMatch && platformMatch;
         });
     }, [comments, filters.searchTerm, filters.status, filters.platform]);
+
+    // *** ADD LOG HERE ***
+    console.log("Filtered comments:", filteredComments);
 
     // --- Event Handlers (Similar to Leads/Posts) ---
     const handleFilterChange = (key: keyof FilterState, value: any) => {
