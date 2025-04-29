@@ -22,8 +22,9 @@ interface CommentFrom {
 
 // Define the structure for a single comment coming in the payload
 interface InputComment {
+  id: string; // Platform-specific comment ID
   from: CommentFrom;
-  message: string; // Changed from 'text'
+  message: string; 
 }
 
 interface CommentWebhookPayload {
@@ -67,16 +68,16 @@ export async function POST(request: NextRequest) {
       // Check if every comment object has the required nested structure and fields
       !comments.every(c => 
         c && 
+        typeof c.id === 'string' && // Validate the comment's own ID
         c.from && 
         typeof c.from.name === 'string' && 
-        typeof c.from.id === 'string' && // Also validate the platform ID
+        // typeof c.from.id === 'string' && // No longer strictly needed for insertion, but good to keep for validation? Let's remove for now as user wants to ignore from.id
         typeof c.message === 'string'
       ) 
     ) {
       console.warn(`[${new Date().toISOString()}] Public Post Comments API: Invalid payload structure received. platform_post_id: ${platform_post_id}`, JSON.stringify(payload, null, 2));
-      // Add more specific validation logging if needed
       return NextResponse.json(
-        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array, where each comment has from.name (string), from.id (string), and message (string).' }, 
+        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array, where each comment has id (string), from.name (string), and message (string).' }, 
         { status: 400 }
       );
     }
@@ -107,14 +108,13 @@ export async function POST(request: NextRequest) {
 
     // --- Prepare Comments for Insertion ---    
     const commentsToInsert = comments.map(comment => ({
-      post_id: internalPostId,       // Link to our internal post UUID (matches schema if posts.id is UUID)
-      content: comment.message,      // Corrected: Map to 'content' column
-      lead_name: comment.from.name,  // Get name from nested 'from.name' (matches schema)
-      external_id: comment.from.id   // Corrected: Map platform user ID to 'external_id' column
-      // Add other fields here if needed, like 'source' or defaults for other columns
+      post_id: internalPostId,       
+      content: comment.message,      // Map message text to 'content'
+      lead_name: comment.from.name,  // Map user name to 'lead_name'
+      external_id: comment.id        // Corrected: Map comment's own ID to 'external_id'
     }));
 
-    console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`);
+    console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`, JSON.stringify(commentsToInsert, null, 2)); // Log the actual data being inserted
     const { data: insertedComments, error: insertError } = await supabase
       .from('comments') // Corrected: Target the comments table
       .insert(commentsToInsert);
