@@ -14,16 +14,21 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Create client only if config is present
 const supabase = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 
+// Define the structure for the nested "from" object
+interface CommentFrom {
+  name: string;
+  id: string; // Platform-specific user ID
+}
+
 // Define the structure for a single comment coming in the payload
 interface InputComment {
-  text: string;
-  // Name of the lead/user who made the comment
-  lead_name: string; 
+  from: CommentFrom;
+  message: string; // Changed from 'text'
 }
 
 interface CommentWebhookPayload {
   platform_post_id: string;
-  comments: InputComment[]; // Now an array of comment objects
+  comments: InputComment[]; // Array of the updated comment objects
 }
 
 /**
@@ -59,13 +64,19 @@ export async function POST(request: NextRequest) {
       !comments || 
       !Array.isArray(comments) || 
       comments.length === 0 ||
-      // Check if every comment object has the required fields
-      !comments.every(c => c && typeof c.text === 'string' && typeof c.lead_name === 'string') 
+      // Check if every comment object has the required nested structure and fields
+      !comments.every(c => 
+        c && 
+        c.from && 
+        typeof c.from.name === 'string' && 
+        typeof c.from.id === 'string' && // Also validate the platform ID
+        typeof c.message === 'string'
+      ) 
     ) {
-      console.warn(`[${new Date().toISOString()}] Public Post Comments API: Invalid payload received. platform_post_id: ${platform_post_id}, comments type: ${typeof comments}, isArray: ${Array.isArray(comments)}, length: ${comments?.length}`);
+      console.warn(`[${new Date().toISOString()}] Public Post Comments API: Invalid payload structure received. platform_post_id: ${platform_post_id}`, JSON.stringify(payload, null, 2));
       // Add more specific validation logging if needed
       return NextResponse.json(
-        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array, where each comment has text and lead_name (string).' }, 
+        { success: false, message: 'Invalid payload: requires platform_post_id and a non-empty comments array, where each comment has from.name (string), from.id (string), and message (string).' }, 
         { status: 400 }
       );
     }
@@ -97,10 +108,10 @@ export async function POST(request: NextRequest) {
     // --- Prepare Comments for Insertion ---    
     const commentsToInsert = comments.map(comment => ({
       post_id: internalPostId,       // Link to our internal post UUID
-      comment_text: comment.text,
-      lead_name: comment.lead_name  // Store the lead's name directly
-      // Add other fields here if available in payload, e.g.:
-      // platform_comment_id: comment.platform_id,
+      comment_text: comment.message,   // Get text from 'message' field
+      lead_name: comment.from.name,  // Get name from nested 'from.name'
+      platform_lead_id: comment.from.id // Store the platform-specific lead ID
+      // Add other fields here if available in payload
     }));
 
     console.log(`[${new Date().toISOString()}] Public Post Comments API: Attempting to insert ${commentsToInsert.length} comments for internal post ID: ${internalPostId}`);
