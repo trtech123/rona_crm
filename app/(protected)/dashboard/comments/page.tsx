@@ -86,6 +86,8 @@ export default function CommentsPage() {
         const fetchComments = async () => {
             setIsLoading(true);
             setError(null);
+            // Log the filters being used for this fetch
+            console.log(`[${new Date().toISOString()}] Fetching comments with filters:`, JSON.stringify(filters));
             try {
                 // Fetch necessary columns directly
                 // If post title needed, perform join: .select('*, posts(title)')
@@ -94,7 +96,10 @@ export default function CommentsPage() {
                     .select('id, created_at, post_id, lead_name, content, source, external_id, user_id') // Select actual columns
                     .order(filters.sortBy, { ascending: filters.sortDirection === 'asc' });
 
+                // *** ADD LOGS HERE ***
+                console.log(`[${new Date().toISOString()}] Raw data from Supabase:`, data);
                 if (dbError) {
+                    console.error(`[${new Date().toISOString()}] Supabase fetch error object:`, dbError);
                     throw new Error(`Comments fetch error: ${dbError.message}`);
                 }
 
