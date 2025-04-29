@@ -17,21 +17,22 @@ import { useRouter } from 'next/navigation';
 
 // Interface for Comment data (Adapt based on actual Supabase 'comments' table)
 interface Comment {
-    id: number;
+    id: string; // Assuming UUID from Supabase
     created_at: string;
-    post_id?: number; // Link to the related post
-    post_title?: string; // Might be joined or fetched separately
-    author_id?: string; // User ID if logged in
-    author_name: string;
-    author_avatar_url?: string;
-    content: string;
-    status: string; // e.g., 'Approved', 'Pending', 'Spam', 'Replied'
-    platform?: string; // e.g., 'Facebook', 'Instagram', 'Blog'
-    likes?: number;
-    // Helper properties
-    statusColor?: string;
-    platformColor?: string;
-    platformIcon?: React.ElementType;
+    post_id?: string; // Assuming UUID foreign key
+    // post_title?: string; // Requires join
+    user_id?: string; // From Supabase auth or related user table
+    lead_name: string; // Correct field from table
+    // author_avatar_url?: string; // Not available in table
+    content: string; // Correct field from table
+    // status: string; // Not available in table - remove or add to DB
+    source?: string; // Correct field for platform/source
+    external_id?: string; // Platform-specific comment ID
+    // likes?: number; // Not available in table
+    // Helper properties - these will need adjustment
+    statusColor?: string; // May need to remove or derive differently
+    platformColor?: string; // Derive from 'source'
+    platformIcon?: React.ElementType; // Derive from 'source'
 }
 
 // Adjusted FilterState for Comments
@@ -45,18 +46,22 @@ interface FilterState {
 
 // Mappings for colors (adjust as needed for comment statuses and platforms)
 const commentStatusStyleMapping: { [key: string]: { color: string } } = {
-    'ממתין לאישור': { color: '#f39c12' }, // Orange
-    'מאושר': { color: '#2ecc71' }, // Green
-    'ספאם': { color: '#e74c3c' }, // Red
-    'נענה': { color: '#3498db' }, // Blue
-    'ברירת מחדל': { color: '#bdc3c7' }, // Light Gray
+    // Define statuses if you add a status column, otherwise remove/comment out
+    // 'ממתין לאישור': { color: '#f39c12' }, 
+    // 'מאושר': { color: '#2ecc71' }, 
+    // 'ספאם': { color: '#e74c3c' }, 
+    // 'נענה': { color: '#3498db' }, 
+    'ברירת מחדל': { color: '#bdc3c7' }, // Keep a default
 };
 
+// Update platform mapping to use potential values from 'source' column
 const platformStyleMapping: { [key: string]: { color: string, icon: React.ElementType } } = {
-    'פייסבוק': { color: '#3b5998', icon: MessageSquare },
-    'אינסטגרם': { color: '#e1306c', icon: MessageSquare },
-    'בלוג': { color: '#f39c12', icon: LinkIcon },
-    'אחר': { color: '#7f8c8d', icon: MessageSquare },
+    // Guessing potential source values - **ADJUST THESE KEYS TO MATCH ACTUAL DATA**
+    'facebook': { color: '#3b5998', icon: MessageSquare }, 
+    'instagram': { color: '#e1306c', icon: MessageSquare },
+    'api': { color: '#8e44ad', icon: LinkIcon }, // Example for API source
+    'manual': { color: '#2c3e50', icon: Edit }, // Example for manual entry
+    'default': { color: '#7f8c8d', icon: MessageSquare }, // Default/fallback
 };
 
 
@@ -82,27 +87,33 @@ export default function CommentsPage() {
             setIsLoading(true);
             setError(null);
             try {
-                // TODO: Adjust select query to join post title if needed
+                // Fetch necessary columns directly
+                // If post title needed, perform join: .select('*, posts(title)')
                 const { data, error: dbError } = await supabase
-                    .from('comments') // Fetch from 'comments' table
-                    .select('*') // Might need: '*, posts(title)'
+                    .from('comments') 
+                    .select('id, created_at, post_id, lead_name, content, source, external_id, user_id') // Select actual columns
                     .order(filters.sortBy, { ascending: filters.sortDirection === 'asc' });
 
                 if (dbError) {
                     throw new Error(`Comments fetch error: ${dbError.message}`);
                 }
 
-                // Add computed styles/icons
+                // Add computed styles/icons based on available data
                 const processedData = data?.map(comment => {
-                    const statusStyle = commentStatusStyleMapping[comment.status] || commentStatusStyleMapping['ברירת מחדל'];
-                    const platformStyle = platformStyleMapping[comment.platform] || platformStyleMapping['אחר'];
+                    // Derive status style differently if status column doesn't exist
+                    const statusStyle = commentStatusStyleMapping['ברירת מחדל']; // Default until status exists
+                    
+                    // Derive platform style from the 'source' field
+                    const platformKey = comment.source?.toLowerCase() || 'default';
+                    const platformStyle = platformStyleMapping[platformKey] || platformStyleMapping['default'];
+                    
                     return {
                         ...comment,
-                        // post_title: comment.posts?.title // If joined
+                        // post_title: comment.posts?.title // Only if joined
                         statusColor: statusStyle.color,
                         platformColor: platformStyle.color,
                         platformIcon: platformStyle.icon,
-                    };
+                    } as Comment; // Assert type after adding computed props
                 }) || [];
 
                 setComments(processedData);
@@ -121,12 +132,11 @@ export default function CommentsPage() {
     const filteredComments = useMemo(() => {
         return comments.filter(comment => {
             const searchTermMatch = filters.searchTerm === '' ||
-                comment.author_name?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-                comment.content?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-                comment.post_title?.toLowerCase().includes(filters.searchTerm.toLowerCase()); // Search in post title too if available
+                comment.lead_name?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+                comment.content?.toLowerCase().includes(filters.searchTerm.toLowerCase());
 
-            const statusMatch = filters.status.length === 0 || filters.status.includes(comment.status);
-            const platformMatch = filters.platform.length === 0 || filters.platform.includes(comment.platform);
+            const statusMatch = filters.status.length === 0 || filters.status.includes(comment.source || 'default');
+            const platformMatch = filters.platform.length === 0 || filters.platform.includes(comment.source || 'default');
 
             return searchTermMatch && statusMatch && platformMatch;
         });
@@ -182,15 +192,14 @@ export default function CommentsPage() {
             <CardContent className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
                     <Avatar className="h-8 w-8 border">
-                        <AvatarImage src={comment.author_avatar_url} alt={comment.author_name} />
-                        <AvatarFallback>{comment.author_name?.charAt(0) || 'U'}</AvatarFallback>
+                        <AvatarFallback>{comment.lead_name?.charAt(0)?.toUpperCase() || '?'}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-center">
-                             <span className="font-semibold text-sm text-gray-800 truncate" title={comment.author_name}>{comment.author_name}</span>
-                             {comment.platformIcon && <comment.platformIcon className="h-4 w-4 text-gray-400 flex-shrink-0" title={comment.platform}/>}
+                             <span className="font-semibold text-sm text-gray-800 truncate" title={comment.lead_name}>{comment.lead_name}</span>
+                             {comment.platformIcon && <comment.platformIcon className="h-4 w-4 text-gray-400 flex-shrink-0" title={comment.source}/>}
                          </div>
-                        <p className="text-xs text-gray-500 truncate" title={comment.post_title}>על פוסט: {comment.post_title || `ID ${comment.post_id}`}</p>
+                        <p className="text-xs text-gray-500 truncate">על פוסט ID: {comment.post_id || 'N/A'}</p>
                     </div>
                 </div>
 
@@ -200,24 +209,18 @@ export default function CommentsPage() {
                 </p>
 
                 <div className="flex items-center justify-between pt-1">
-                    <Badge variant="secondary" className="text-xs py-0.5 px-1.5" style={{ backgroundColor: `${comment.statusColor}20`, color: comment.statusColor }}>
-                        {comment.status}
+                    <Badge variant="secondary" className="text-xs py-0.5 px-1.5" style={{ backgroundColor: `${comment.platformColor}20`, color: comment.platformColor }}>
+                        {comment.source || 'לא ידוע'}
                     </Badge>
                     <span className="text-xs text-gray-400">{new Date(comment.created_at).toLocaleDateString('he-IL')}</span>
                 </div>
 
                  {/* Action Buttons */}
-                 <div className="flex justify-end gap-1 pt-2">
-                    {/* Actions might differ for comments - e.g., Reply, Approve, Mark as Spam */}
+                 <div className="flex justify-end items-center gap-1 pt-1 border-t border-gray-100 mt-2">
                     <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-blue-100" title="השב">
                         <MessageSquare className="h-4 w-4 text-blue-600" />
                     </Button>
-                    {comment.status === 'ממתין לאישור' && (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-green-100" title="אשר">
-                            <ThumbsUp className="h-4 w-4 text-green-600" />
-                        </Button>
-                    )}
-                    <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-red-100" title="מחיקה/סמן כספאם">
+                    <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-red-100" title="מחק">
                          <Trash className="h-4 w-4 text-red-600" />
                     </Button>
                  </div>
@@ -231,30 +234,26 @@ export default function CommentsPage() {
              <td className="px-3 py-2">
                  <div className="flex items-center gap-2">
                      <Avatar className="h-6 w-6 border">
-                         <AvatarImage src={comment.author_avatar_url} alt={comment.author_name} />
-                         <AvatarFallback className="text-[10px]">{comment.author_name?.charAt(0) || 'U'}</AvatarFallback>
+                         <AvatarFallback className="text-[10px]">{comment.lead_name?.charAt(0)?.toUpperCase() || '-'}</AvatarFallback>
                      </Avatar>
-                     <span className="font-medium text-gray-800 truncate" title={comment.author_name}>{comment.author_name}</span>
+                     <span className="font-medium text-gray-800 truncate" title={comment.lead_name}>{comment.lead_name}</span>
                  </div>
              </td>
              <td className="px-3 py-2">
                  <p className="text-gray-700 truncate max-w-xs" title={comment.content}>{comment.content}</p>
              </td>
-            <td className="px-3 py-2 text-gray-600 truncate" title={comment.post_title}>{comment.post_title || `פוסט ID ${comment.post_id}`}</td>
+            <td className="px-3 py-2 text-gray-600 truncate">{comment.post_id || 'N/A'}</td>
              <td className="px-3 py-2">
-                  <Badge variant="secondary" className="text-xs" style={{ backgroundColor: `${comment.statusColor}20`, color: comment.statusColor }}>{comment.status}</Badge>
+                  <Badge variant="secondary" className="text-xs" style={{ backgroundColor: `${comment.platformColor}20`, color: comment.platformColor }}>{comment.source || 'לא ידוע'}</Badge>
               </td>
               <td className="px-3 py-2 text-gray-600">
-                 {comment.platformIcon && <comment.platformIcon className="h-4 w-4 inline-block mr-1" style={{color: comment.platformColor}} title={comment.platform}/>}
-                 {comment.platform ?? '-'}
+                 {comment.platformIcon && <comment.platformIcon className="h-4 w-4 inline-block mr-1" style={{color: comment.platformColor}} title={comment.source}/>}
+                 {comment.source ?? '-'}
               </td>
               <td className="px-3 py-2 text-gray-600">{new Date(comment.created_at).toLocaleDateString('he-IL')}</td>
               <td className="px-3 py-2 text-right">
                   <div className="flex justify-end items-center gap-1">
                       <Button size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-blue-100" title="השב"><MessageSquare className="h-3.5 w-3.5 text-blue-600" /></Button>
-                      {comment.status === 'ממתין לאישור' && (
-                          <Button size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-green-100" title="אשר"><ThumbsUp className="h-3.5 w-3.5 text-green-600" /></Button>
-                      )}
                       <Button size="icon" variant="ghost" className="h-6 w-6 rounded hover:bg-red-100" title="מחק"><Trash className="h-3.5 w-3.5 text-red-600" /></Button>
                   </div>
               </td>
@@ -299,7 +298,7 @@ export default function CommentsPage() {
                                  </Button>
                              </DropdownMenuTrigger>
                              <DropdownMenuContent align="start">
-                                 {getDistinctValues('status').map((status) => (
+                                 {getDistinctValues('source').map((status) => (
                                      <DropdownMenuCheckboxItem
                                          key={status}
                                          checked={filters.status.includes(status)}
@@ -320,7 +319,7 @@ export default function CommentsPage() {
                                  </Button>
                              </DropdownMenuTrigger>
                              <DropdownMenuContent align="start">
-                                 {getDistinctValues('platform').map((platform) => (
+                                 {getDistinctValues('source').map((platform) => (
                                      <DropdownMenuCheckboxItem
                                          key={platform}
                                          checked={filters.platform.includes(platform)}
@@ -394,18 +393,18 @@ export default function CommentsPage() {
                                 <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
                                         <tr>
-                                             <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('author_name')}>
-                                                 <div className="flex items-center">מחבר {renderSortIcon('author_name')}</div>
+                                             <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('lead_name')}>
+                                                 <div className="flex items-center">מחבר {renderSortIcon('lead_name')}</div>
                                              </th>
                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">תוכן</th>
                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('post_id')}>
                                                   <div className="flex items-center">פוסט מקושר {renderSortIcon('post_id')}</div>
                                               </th>
-                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('status')}>
-                                                  <div className="flex items-center">סטטוס {renderSortIcon('status')}</div>
+                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('source')}>
+                                                  <div className="flex items-center">סטטוס/מקור {renderSortIcon('source')}</div>
                                               </th>
-                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('platform')}>
-                                                  <div className="flex items-center">פלטפורמה {renderSortIcon('platform')}</div>
+                                              <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('source')}>
+                                                  <div className="flex items-center">פלטפורמה/מקור {renderSortIcon('source')}</div>
                                               </th>
                                               <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSortChange('created_at')}>
                                                   <div className="flex items-center">תאריך יצירה {renderSortIcon('created_at')}</div>
