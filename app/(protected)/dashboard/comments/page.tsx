@@ -97,26 +97,11 @@ export default function CommentsPage() {
     sortDirection: "desc",
   });
   const router = useRouter();
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-
-  // --- Auth Check ---
-  useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace("/signin");
-        return;
-      }
-      setIsAuthLoading(false);
-    };
-    checkAuth();
-  }, [router]);
+  // Removed client-side auth check; layout should handle this
 
   // --- Data Fetching ---
   useEffect(() => {
-    if (isAuthLoading) return;
+    // Data fetching now starts immediately as layout handles auth
     const fetchComments = async () => {
       setIsLoading(true);
       setError(null);
@@ -125,73 +110,73 @@ export default function CommentsPage() {
         JSON.stringify(filters)
       );
       try {
-        // *** ADD LOG FOR AUTH STATUS ***
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError) {
-          console.error(
-            `[${new Date().toISOString()}] Error getting session:`,
-            sessionError
-          );
-        } else {
-          console.log(
-            `[${new Date().toISOString()}] Supabase session status:`,
-            session
-              ? `Authenticated (User ID: ${session.user.id})`
-              : "Not Authenticated"
-          );
-        }
-        // ********************************
+        // Removed internal getSession call for logging, rely on layout/middleware for auth.
+        console.log(
+          `[${new Date().toISOString()}] Preparing Supabase query...`
+        ); // Log before query
 
-        // Fetch necessary columns directly
-        // If post title needed, perform join: .select('*, posts(title)')
-        const { data, error: dbError } = await supabase
+        const query = supabase
           .from("comments")
           .select(
             "id, created_at, post_id, lead_name, content, source, external_id, user_id"
-          ) // Select actual columns
+          )
           .order(filters.sortBy, {
             ascending: filters.sortDirection === "asc",
           });
 
-        // *** ADD LOGS HERE ***
-        console.log(
-          `[${new Date().toISOString()}] Raw data from Supabase:`,
-          data
-        );
+        const { data, error: dbError } = await query;
+        console.log(`[${new Date().toISOString()}] Supabase query finished.`); // Log after query
+
         if (dbError) {
           console.error(
-            `[${new Date().toISOString()}] Supabase fetch error object:`,
+            `[${new Date().toISOString()}] Supabase DB Error:`,
             dbError
           );
-          throw new Error(`Comments fetch error: ${dbError.message}`);
+          // Provide more specific error details if possible
+          throw new Error(
+            `Failed to fetch comments from database: ${dbError.message} (Code: ${dbError.code})`
+          );
         }
+        console.log(
+          `[${new Date().toISOString()}] Received raw data count: ${
+            data?.length ?? 0
+          }`
+        );
 
-        // Add computed styles/icons based on available data
-        const processedData =
-          data?.map((comment) => {
-            // Derive status style differently if status column doesn't exist
-            const statusStyle = commentStatusStyleMapping["ברירת מחדל"]; // Default until status exists
+        console.log(
+          `[${new Date().toISOString()}] Processing received data...`
+        ); // Log before processing
+        let processedData = [];
+        try {
+          processedData =
+            data?.map((comment) => {
+              const statusStyle = commentStatusStyleMapping["ברירת מחדל"];
+              const platformKey = comment.source?.toLowerCase() || "default";
+              const platformStyle =
+                platformStyleMapping[platformKey] ||
+                platformStyleMapping["default"];
 
-            // Derive platform style from the 'source' field
-            const platformKey = comment.source?.toLowerCase() || "default";
-            const platformStyle =
-              platformStyleMapping[platformKey] ||
-              platformStyleMapping["default"];
+              if (!platformStyle) {
+                // Add a check for safety
+                console.warn(`Missing platform style for key: ${platformKey}`);
+              }
 
-            return {
-              ...comment,
-              // post_title: comment.posts?.title // Only if joined
-              statusColor: statusStyle.color,
-              platformColor: platformStyle.color,
-              platformIcon: platformStyle.icon,
-            } as Comment; // Assert type after adding computed props
-          }) || [];
-
-        // *** ADD LOG HERE ***
-        console.log("Processed data before setting state:", processedData);
+              return {
+                ...comment,
+                statusColor: statusStyle?.color, // Use optional chaining
+                platformColor: platformStyle?.color, // Use optional chaining
+                platformIcon: platformStyle?.icon, // Use optional chaining
+              } as Comment;
+            }) || [];
+        } catch (processingError: any) {
+          console.error("Error during data processing:", processingError);
+          throw new Error(`Data processing failed: ${processingError.message}`);
+        }
+        console.log(
+          `[${new Date().toISOString()}] Data processing finished. Processed count: ${
+            processedData.length
+          }`
+        );
 
         setComments(processedData);
       } catch (err: any) {
@@ -203,7 +188,7 @@ export default function CommentsPage() {
     };
 
     fetchComments();
-  }, [filters.sortBy, filters.sortDirection, isAuthLoading]); // Re-fetch when sorting changes
+  }, [filters.sortBy, filters.sortDirection]); // Removed isAuthLoading dependency
 
   // --- Filtering Logic ---
   const filteredComments = useMemo(() => {
